@@ -5,4 +5,4 @@ numpy
 pysubs2
 py-cpuinfo
 ctranslate2>=4.6.0
-whisperx @ git+https://github.com/m-bain/whisperX.git
+whisperx
