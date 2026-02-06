@@ -27,4 +27,5 @@ jobs:
         uses: python-semantic-release/python-semantic-release@v9.8.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          pypi_token: ${{ secrets.PYPI_TOKEN }}
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
