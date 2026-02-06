@@ -2,6 +2,13 @@
 
 
 
+## v1.1.0 (2026-02-06)
+
+### Feature
+
+* feat: add cross-language sync support via NLLB and CTranslate2 ([`956c2f2`](https://github.com/ellite/anchor-sub-sync/commit/956c2f21867e59df00afd084fb940265309ea666))
+
+
 ## v1.0.3 (2026-02-06)
 
 ### Fix
