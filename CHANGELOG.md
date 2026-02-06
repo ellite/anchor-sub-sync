@@ -2,6 +2,13 @@
 
 
 
+## v1.0.3 (2026-02-06)
+
+### Fix
+
+* fix: attempt pypi publish ([`c0cda80`](https://github.com/ellite/anchor-sub-sync/commit/c0cda80aa79a4f3824248cc9a0c14772cee65dce))
+
+
 ## v1.0.2 (2026-02-06)
 
 ### Fix
