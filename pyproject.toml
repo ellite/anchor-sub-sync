@@ -26,8 +26,11 @@ where = ["."]
 [tool.semantic_release]
 version_variables = ["anchor/__init__.py:__version__"]
 version_toml = ["pyproject.toml:project.version"]
-branches = ["main"]                                      
 build_command = "pip install build && python -m build"
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
 
 [tool.semantic_release.publish]
 dist_glob_patterns = ["dist/*"]
