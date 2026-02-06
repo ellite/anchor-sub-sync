@@ -23,9 +23,17 @@ jobs:
         with:
           python-version: "3.10"
 
+      # Step 1: Handle Versioning, Tagging, and GitHub Release
       - name: Python Semantic Release
+        id: release
         uses: python-semantic-release/python-semantic-release@v9.8.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+
+      # Step 2: Explicitly Publish to PyPI
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        if: steps.release.outputs.released == 'true'
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_TOKEN }}
