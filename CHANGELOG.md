@@ -2,6 +2,15 @@
 
 
 
+## v1.0.2 (2026-02-06)
+
+### Fix
+
+* fix: attempt pypi publish ([`f8b5b65`](https://github.com/ellite/anchor-sub-sync/commit/f8b5b659cc2125830372d0678ee2f9c723a07159))
+
+* fix: attempt pypi publish ([`4f6efa7`](https://github.com/ellite/anchor-sub-sync/commit/4f6efa7a4239b1f11f0f7b890b1220c5818824d5))
+
+
 ## v1.0.1 (2026-02-06)
 
 ### Fix
