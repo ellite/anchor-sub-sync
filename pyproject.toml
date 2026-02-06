@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "anchor-sub-sync"
 version = "1.0.3"
 description = "GPU-accelerated AI Subtitle Sync"
+readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "rich",
@@ -14,7 +15,10 @@ dependencies = [
     "whisperx",
     "pysubs2",
     "py-cpuinfo",
-    "ctranslate2>=4.6.0"
+    "ctranslate2>=4.6.0",
+    "langdetect",
+    "transformers",
+    "huggingface_hub",
 ]
 
 [project.scripts]

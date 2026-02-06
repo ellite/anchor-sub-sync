@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import pysubs2
 import logging
+from langdetect import detect, LangDetectException
 from rich.console import Console
 from pathlib import Path
 
@@ -27,6 +28,74 @@ ISO_639_MAPPING = {
     'fin': 'fi', 'tur': 'tr', 'pol': 'pl', 'ukr': 'uk', 'ara': 'ar',
     'hin': 'hi', 'vie': 'vi', 'tha': 'th', 'ind': 'id'
 }
+
+def get_language_code_for_nllb(iso_code: str) -> str:
+    """
+    Maps ISO 639-1 (2-letter) codes to NLLB/FLORES-200 codes.
+    Default fallback is 'eng_Latn' if the language is not found.
+    """
+    code = iso_code.strip().lower()
+
+    iso_to_nllb = {
+        "af": "afr_Latn", "am": "amh_Ethi", "ar": "arb_Arab", "az": "azj_Latn",
+        "be": "bel_Cyrl", "bg": "bul_Cyrl", "bn": "ben_Beng", "bs": "bos_Latn",
+        "ca": "cat_Latn", "cs": "ces_Latn", "cy": "cym_Latn", "da": "dan_Latn",
+        "de": "deu_Latn", "el": "ell_Grek", "en": "eng_Latn", "es": "spa_Latn",
+        "et": "est_Latn", "eu": "eus_Latn", "fa": "pes_Arab", "fi": "fin_Latn",
+        "fr": "fra_Latn", "gl": "glg_Latn", "gu": "guj_Gujr", "he": "heb_Hebr",
+        "hi": "hin_Deva", "hr": "hrv_Latn", "hu": "hun_Latn", "hy": "hye_Armn",
+        "id": "ind_Latn", "is": "isl_Latn", "it": "ita_Latn", "ja": "jpn_Jpan",
+        "jv": "jav_Latn", "ka": "kat_Geor", "kk": "kaz_Cyrl", "km": "khm_Khmr",
+        "kn": "kan_Knda", "ko": "kor_Hang", "lo": "lao_Laoo", "lt": "lit_Latn",
+        "lv": "lvs_Latn", "mk": "mkd_Cyrl", "ml": "mal_Mlym", "mn": "khk_Cyrl",
+        "mr": "mar_Deva", "ms": "zsm_Latn", "my": "mya_Mymr", "nl": "nld_Latn",
+        "no": "nob_Latn", "or": "ory_Orya", "pa": "pan_Guru", "pl": "pol_Latn",
+        "ps": "pbt_Arab", "pt": "por_Latn", "ro": "ron_Latn", "ru": "rus_Cyrl",
+        "sd": "snd_Arab", "si": "sin_Sinh", "sk": "slk_Latn", "sl": "slv_Latn",
+        "so": "som_Latn", "sq": "als_Latn", "sr": "srp_Cyrl", "sv": "swe_Latn",
+        "sw": "swh_Latn", "ta": "tam_Taml", "te": "tel_Telu", "th": "tha_Thai",
+        "tl": "tgl_Latn", "tr": "tur_Latn", "uk": "ukr_Cyrl", "ur": "urd_Arab",
+        "uz": "uzn_Latn", "vi": "vie_Latn", "yo": "yor_Latn", "zh": "zho_Hans",
+        "zh-cn": "zho_Hans", "zh-tw": "zho_Hant", "zu": "zul_Latn"
+    }
+
+    return iso_to_nllb.get(code, "eng_Latn")
+
+def open_subtitle(path: Path) -> pysubs2.SSAFile:
+    """
+    Attempts to load a subtitle file using various common encodings.
+    """
+    encodings = [
+        "utf-8",
+        "utf-8-sig",
+        "cp1252",
+        "cp1250",
+        "cp1251",
+        "gb18030",       
+        "big5",          
+        "shift_jis",     
+        "cp949",         
+        "cp874",         
+        "cp1258",        
+        "cp1257",        
+        "cp1256",        
+        "cp1255",        
+        "cp1254",        
+        "cp1253",        
+        "latin-1",       
+    ]
+    
+    path_str = str(path)
+    
+    for enc in encodings:
+        try:
+            return pysubs2.load(path_str, encoding=enc)
+        except Exception as e:
+            last_error = e
+            continue
+            
+    console.print(f"[bold red]❌ Failed to open {path.name}. Last error: {last_error}[/bold red]")
+    raise ValueError(f"Could not open {path.name}")
 
 def check_dependencies():
     if not shutil.which("ffmpeg"):
@@ -82,6 +151,42 @@ def get_audio_language(video_path: Path):
         if len(raw_lang) == 2: return raw_lang
         return ISO_639_MAPPING.get(raw_lang, None)
     except Exception: return None
+
+def get_subtitle_language(sub_path: Path) -> str:
+    """
+    Detects the language of a subtitle file by analyzing its text content.
+    Returns the ISO 639-1 code (e.g., 'en', 'pt', 'es').
+    """
+    try:
+        # Use safe loader
+        subs = open_subtitle(sub_path)
+        
+        # Collect text samples
+        sample_text = []
+        char_count = 0
+        
+        for event in subs:
+            text = event.plaintext.strip()
+            
+            # Skip empty lines, numbers, or very short generic sounds
+            if not text or len(text) < 2 or text.isnumeric():
+                continue
+                
+            sample_text.append(text)
+            char_count += len(text)
+            
+            if char_count > 1000:
+                break
+        
+        if not sample_text:
+            return "unknown"
+
+        full_sample = " ".join(sample_text)
+        return detect(full_sample)
+
+    except (LangDetectException, ValueError, Exception) as e:
+        return "unknown"
+    
 
 class CaptureProgress:
     """
@@ -203,13 +308,6 @@ class CaptureProgress:
 
         if "error" in lower or "traceback" in lower:
             self.ui_console.print(f"[red]{clean}[/red]")
-
-def load_subs_safely(file_path):
-    encodings = ['utf-8', 'windows-1252', 'latin-1', 'utf-16']
-    for enc in encodings:
-        try: return pysubs2.load(str(file_path), encoding=enc)
-        except: continue
-    raise Exception(f"Could not decode subtitle file {file_path}.")
 
 def make_ui_console():
     if os.name == 'posix':

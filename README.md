@@ -58,6 +58,60 @@ Most tools treat subtitles as a static block of text. This system treats them as
 
 </details>
 
+## 🌍 Automatic Cross-Language Sync
+
+Anchor 1.1+ can now synchronize subtitles even when they are in a different language than the audio (for example, English audio with Portuguese subtitles). This is done by creating a temporary "ghost" translation of your subtitles into the audio language, syncing that translation to the audio, and then applying the improved timestamps back to your original file.
+
+<details>
+<summary>How it works (expand)</summary>
+
+1. **Detection:** Anchor detects a mismatch between the audio language and the subtitle file language (e.g., Audio: EN, Subtitle: PT).
+
+2. **Translation:** Anchor uses a fast neural translation model (NLLB via CTranslate2) to create a temporary translated subtitle file in the audio language.
+
+3. **Sync:** The temporary "ghost" translation is synchronized against the audio track using the normal alignment pipeline.
+
+4. **Restoration:** The accurate timestamps are transferred back to your original subtitle file, preserving the original text while fixing timing.
+
+The result is your original subtitle text, timed accurately to the foreign-language audio.
+
+</details>
+
+### 🧠 Translation Models
+
+Anchor uses NLLB-200 (No Language Left Behind) via the `ctranslate2` engine for high speed and low memory usage. You can override the automatic choice with the `-t` / `--translation-model` flag.
+
+Note: The first time you use a translation model it will be downloaded automatically (approx. 1GB — 3.5GB depending on model). Models are cached locally for reuse.
+
+Supported Translation Models
+----------------------------
+
+The following pre-built CTranslate2 models are supported and can be passed directly to `-t`:
+
+- `softcatala/nllb-200-distilled-600M-ct2-int8`
+- `OpenNMT/nllb-200-distilled-600M-ct2-int8`
+- `softcatala/nllb-200-1.3B-ct2-int8`
+- `OpenNMT/nllb-200-distilled-1.3B-ct2-int8`
+- `OpenNMT/nllb-200-1.3B-ct2-int8`
+- `OpenNMT/nllb-200-3.3B-ct2-int8`
+
+For convenience, Anchor also supports shorthand names that map to reasonable defaults:
+
+| Shorthand | Model |
+| --------- | ----- |
+| `small` | `softcatala/nllb-200-distilled-600M-ct2-int8` |
+| `medium` | `softcatala/nllb-200-1.3B-ct2-int8` |
+| `large` | `OpenNMT/nllb-200-3.3B-ct2-int8` |
+
+Example usages:
+
+```bash
+anchor -t small
+anchor --translation-model OpenNMT/nllb-200-1.3B-ct2-int8
+```
+
+And ensure you have enough disk space for model downloads.
+
 ## ⚡ Performance Test with model large-v3
 
 - GPU (NVIDIA RTX 2000E): synced a 44-minute episode in ~82 seconds.
@@ -68,24 +122,26 @@ Most tools treat subtitles as a static block of text. This system treats them as
 
 *Tests performed on a 44-minute video file (English). With music and gun fire scenes.* **Hardware:** NVIDIA RTX 2000E Ada Generation (16 GB)
 
-| Model | Time | Speed | Anchors Found | User Score | Notes |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **Large-v3** | 82s | ~32x | 600 | 10 / 10 | The gold standard for accuracy, but slower. |
-| **Medium.en** | 62s | ~42x | 598 | 10 / 10 | Best Balance. Perfect sync, identical to Large-v3 but 25% faster. |
-| **Small.en** | 44s | ~60x | 603 | 9.9 / 10 | Fastest usable. Twice as fast as Large-v3. Minor sync drift (<0.1s). |
-| **Base.en** | 35s | ~75x | 585 | 9.7 / 10 | Very fast, but prone to drift on non-speech sounds (e.g., gunshots). |
+| Model | Translation | Time | Speed | Anchors Found | User Score | Notes |
+| :--- | :---: | :---: | :---: | :---: | :--- | :--- |
+| **Large-v3** | 3.3B | 98s | ~27x | 514 | 10 / 10 | Translation of 669 lines added 16s. |
+| **Large-v3** | N/A | 82s | ~32x | 600 | 10 / 10 | The gold standard for accuracy, but slower. |
+| **Medium.en** | N/A | 62s | ~42x | 598 | 10 / 10 | Best Balance. Perfect sync, identical to Large-v3 but 25% faster. |
+| **Small.en** | N/A | 44s | ~60x | 603 | 9.9 / 10 | Fastest usable. Twice as fast as Large-v3. Minor sync drift (<0.1s). |
+| **Base.en** | N/A | 35s | ~75x | 585 | 9.7 / 10 | Very fast, but prone to drift on non-speech sounds (e.g., gunshots). |
 
 ### 📉 CPU Performance Benchmarks
 
 *Tests performed on a 44-minute video file (English).* **Hardware:** 12th Gen Intel Core i5-12600H
 
-| Model | Time | Speed | Anchors Found | User Score | Notes |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **Large-v3** | ~16 min | ~2.7x | 599 | 10 / 10 | *Baseline.* Too slow for daily use on CPU. |
-| **Medium.en** | 12.8 min | ~3.4x | 595 | 10 / 10 | Accurate, but the extra 7-minute wait didn't add value. |
-| **Small.en** | 5.7 min | ~7.6x | 601 | 10 / 10 | 2x faster than Medium with *better* anchor detection. |
-| **Base.en** | 4.1 min | ~11x | 579 | 9.7 / 10 | Decent, but not significantly better than Tiny to justify the extra time. |
-| **Tiny.en** | 3.7 min | ~12x | 572 | 9.5 / 10 | Incredibly fast. Good overall sync, but slightly less precise start times (ms delay). |
+| Model | Translation | Time | Speed | Anchors Found | User Score | Notes |
+| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Large-v3** | N/A | ~16 min | ~2.7x | 599 | 10 / 10 | *Baseline.* Too slow for daily use on CPU. |
+| **Medium.en** |	1.3B | 12.5 min | ~3.5x | 518 | 10 / 10 | Translation of 669 lines added ~60s. |
+| **Medium.en** | N/A | 11.5 min | ~3.8x | 595 | 10 / 10 | Accurate, but the extra 6-minute wait didn't add much value. |
+| **Small.en** | N/A | 5.7 min | ~7.6x | 601 | 10 / 10 | 2x faster than Medium with *better* anchor detection. |
+| **Base.en** | N/A | 4.1 min | ~11x | 579 | 9.7 / 10 | Decent, but not significantly better than Tiny to justify the extra time. |
+| **Tiny.en** | N/A | 3.7 min | ~12x | 572 | 9.5 / 10 | Incredibly fast. Good overall sync, but slightly less precise start times (ms delay). |
 
 ## 🚀 Requirements
 
@@ -201,6 +257,7 @@ You can override the automatic hardware detection or control specific settings u
 | ------ | ----- | ----------- |
 | --model | -m | Force a specific Whisper model (e.g., tiny, medium, large-v3-turbo). |
 | --batch-size | -b | Manually set the batch size (e.g., 8, 16). Useful for optimizing VRAM usage. |
+| --translation-model | -t | Force a specific translation model (overrides automatic selection). |
 | --help | -h  | Show the help message and exit. |
 
 Examples

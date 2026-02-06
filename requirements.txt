@@ -6,3 +6,6 @@ pysubs2
 py-cpuinfo
 ctranslate2>=4.6.0
 whisperx
+langdetect
+transformers
+huggingface_hub

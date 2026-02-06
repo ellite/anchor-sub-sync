@@ -9,7 +9,7 @@ import difflib
 import numpy as np
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
-from .utils import clean_text, load_subs_safely, make_ui_console, CaptureProgress
+from .utils import clean_text, open_subtitle, make_ui_console, CaptureProgress
 
 console = Console()
 
@@ -245,7 +245,6 @@ def run_anchor_sync(video_path, sub_path, device, compute_type, batch_size, mode
             ) as progress:
                 
                 ui_console.print(f"[dim]🎤 Transcribing audio (Batch Size: {current_batch_size}, Compute: {compute_type})...[/dim]")
-                
                 task_id = progress.add_task(f"[cyan]Transcribing...", total=100 if not is_windows else None)
                 progress.refresh()
                 
@@ -287,7 +286,7 @@ def run_anchor_sync(video_path, sub_path, device, compute_type, batch_size, mode
     
     console.print(f"[dim]📝 Transcription complete.[/dim]")
 
-    # 4. Align Phonemes
+    # Align Phonemes
     # Use a spinner context to show activity during the CPU-heavy task
     with Progress(
         SpinnerColumn(),
@@ -324,7 +323,7 @@ def run_anchor_sync(video_path, sub_path, device, compute_type, batch_size, mode
 
     console.print("[dim]📏 Phoneme alignment complete.[/dim]")
 
-    # 5. Prepare Data
+    # Prepare Data
     whisper_data = []
     for seg in segments:
         whisper_data.append({
@@ -332,9 +331,9 @@ def run_anchor_sync(video_path, sub_path, device, compute_type, batch_size, mode
             'text': seg['text'], 'words': seg.get('words', [])
         })
 
-    # 6. Global Aligner
+    # Global Aligner
     console.print("[dim]🧮 Calculating sync offsets...[/dim]")
-    original_subs = load_subs_safely(str(sub_path))
+    original_subs = open_subtitle(sub_path)
     aligner = GlobalAligner(original_subs, whisper_data)
     synced_subs, rejected = aligner.run()
     

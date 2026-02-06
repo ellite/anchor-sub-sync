@@ -8,13 +8,15 @@ import argparse
 import re
 import gc
 import torch
+import pysubs2
 from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt
 from .hardware import get_compute_device
-from .utils import parse_range_selection, get_audio_language, check_dependencies
+from .utils import open_subtitle, parse_range_selection, get_audio_language, check_dependencies, get_subtitle_language, get_language_code_for_nllb
 from .core import run_anchor_sync, load_whisper_model
+from .translation import translate_subtitle_nllb
 from . import __version__
 
 console = Console()
@@ -94,6 +96,12 @@ def main():
         help="Force a specific batch size (overrides automatic selection)",
         default=None
     )
+    parser.add_argument(
+        "-t", "--translation-model",
+        type=str,
+        help="Force a specific translation model (overrides automatic selection)",
+        default=None
+    )
     args = parser.parse_args()
 
     try:
@@ -101,8 +109,8 @@ def main():
         console.print(f"[bold blue]🎬 Anchor Subtitle Sync {__version__}[/bold blue]\n")
 
         # 1. Hardware Check
-        device, compute_type, batch_size, model_size = get_compute_device(force_model=args.model, force_batch=args.batch_size)
-        console.print(f"[dim]Engine configured for: [bold white]{device}[/bold white] (model: {model_size}, precision: {compute_type}, batch size: {batch_size})[/dim]\n")
+        device, compute_type, batch_size, model_size, translation_model = get_compute_device(force_model=args.model, force_batch=args.batch_size, force_translation_model=args.translation_model)
+        console.print(f"[dim]Engine configured for: [bold white]{device}[/bold white] (model: {model_size}, precision: {compute_type}, batch size: {batch_size}, translation model: {translation_model})[/dim]\n")
 
         # 2. Dependency Check
         if not check_dependencies():
@@ -172,15 +180,59 @@ def main():
             console.print(f"\n[bold reverse] Task {i}/{len(queue)} [/bold reverse] [cyan]{sub.name}[/cyan]")
             console.print(f"🎬 Video: [yellow]{vid.name}[/yellow]")
             
-            # 1. Determine Required Language
+            # 1. Detection
             meta_lang = get_audio_language(vid) 
-            
             if meta_lang:
                 console.print(f"[dim]🌐 Metadata language detected: [bold cyan]{meta_lang.upper()}[/bold cyan][/dim]")
             else:
                 console.print("[dim]🌐 Language metadata missing. Using Auto-detect.[/dim]")
 
-            # 2. Determine Target Model
+            sub_lang = get_subtitle_language(sub)
+            console.print(f"[dim]📄 Subtitle language detected: [bold cyan]{sub_lang.upper()}[/bold cyan][/dim]")    
+
+            needs_translation = False
+            if meta_lang and sub_lang != "unknown" and meta_lang != sub_lang:
+                console.print(f"[dim]⚠️ Mismatch detected: Audio is {meta_lang.upper()}, Subtitle is {sub_lang.upper()}. Needs translation.[/dim]")
+                needs_translation = True
+
+            # --- PREPARE INPUT FOR SYNC ---
+            # Default: Sync the original file path
+            sub_input_for_sync = sub      
+            
+            # Variables for cleanup later
+            original_sub_object = None    
+            ghost_file_path = None        
+            
+            # 2. Translation
+            if needs_translation:
+                # Load the ORIGINAL content into memory now
+                original_sub_object = open_subtitle(sub)
+                
+                nllb_source = get_language_code_for_nllb(sub_lang)
+                nllb_target = get_language_code_for_nllb(meta_lang)
+                
+                status_msg = f"[bold dim]🔄 Translating subtitles from [cyan]{sub_lang.upper()}[/cyan] to [cyan]{meta_lang.upper()}[/cyan] using NLLB...[/]"
+                
+                with console.status(status_msg, spinner="dots"):
+                    ghost_sub = translate_subtitle_nllb(
+                        original_sub_object, 
+                        nllb_source, 
+                        nllb_target, 
+                        device=device, 
+                        model_id=translation_model
+                    )
+                
+                console.print(f"[dim]✅ Translation complete ({sub_lang.upper()} -> {meta_lang.upper()}).[/dim]")
+
+                # Save Ghost to a TEMP FILE so we can pass a PATH to the sync engine
+                ghost_file_path = sub.with_suffix(f".tmp.{meta_lang}.srt")
+                ghost_sub.save(str(ghost_file_path))
+                
+                # Point the sync engine to the translated temp file
+                sub_input_for_sync = ghost_file_path
+                console.print(f"[dim]👻 Created temporary sync target: {ghost_file_path.name}[/dim]")
+
+            # 3. Determine Target Model
             target_model = model_size
             if meta_lang and meta_lang.lower() == "en":
                 if target_model in {"tiny", "base", "small", "medium"}:
@@ -188,8 +240,8 @@ def main():
 
             console.print(f"[dim]🎯 Target Model: [bold white]{target_model}[/bold white][/dim]") 
 
-            # 3. Check if load / reaload is needed
-            if current_model is None or loaded_lang_code != meta_lang:
+            # Load/Reload Whisper Model
+            if current_model is None or loaded_lang_code != meta_lang or needs_translation:
                 if current_model is not None:
                     console.print(f"[dim]🌐 Language changed ({loaded_lang_code} -> {meta_lang}). Switching model...[/dim]")
                     del current_model
@@ -204,16 +256,47 @@ def main():
             # 4. Run Sync
             start_time = time.time()
             try:
-                out_path, lines, rejected = run_anchor_sync(vid, sub, device, compute_type, batch_size, current_model, meta_lang)
+                # Pass the PATH (Original or Ghost Temp Path)
+                out_path, lines, rejected = run_anchor_sync(vid, sub_input_for_sync, device, compute_type, batch_size, current_model, meta_lang)
+                
+                # 5. Restoration Logic
+                final_output_path = out_path # Default
+                
+                if needs_translation and original_sub_object:
+                    console.print("[dim]📥 Applying synced timestamps back to original subtitle...[/dim]")
+                    
+                    # Load the file Whisper just synced (translated)
+                    synced_ghost = pysubs2.load(str(out_path))
+                    
+                    # Transfer timestamps to Original Object
+                    for orig_event, ghost_event in zip(original_sub_object, synced_ghost):
+                        orig_event.start = ghost_event.start
+                        orig_event.end = ghost_event.end
+                    
+                    # Determine final name
+                    final_output_path = sub.with_suffix(".synced.srt")
+                    original_sub_object.save(str(final_output_path))
+                    console.print(f"💾 Restored Original Content to: [underline]{final_output_path.name}[/underline]")
+                    
+                    # Cleanup Temp Files (The translated files)
+                    try:
+                        if ghost_file_path and ghost_file_path.exists():
+                            ghost_file_path.unlink()
+                        if out_path.exists() and out_path != final_output_path:
+                            out_path.unlink() 
+                    except Exception:
+                        pass 
+
                 duration = time.time() - start_time
                 
                 console.print(f"[bold green]✨ Success![/bold green] ({duration:.1f}s)")
                 console.print(f"  📝 Lines Processed: {lines}")
                 console.print(f"  🗑️ Outliers Rejected: {rejected}")
-                console.print(f"  💾 Saved to: [underline]{out_path.name}[/underline]")
+                
+                if not needs_translation:
+                    console.print(f"  💾 Saved to: [underline]{final_output_path.name}[/underline]")
                 
             except Exception as e:
-                # Increment failure count
                 failed_count += 1
                 console.print(f"[bold red]❌ Failed:[/bold red] {e}")
 
@@ -241,7 +324,7 @@ def main():
         
     except Exception as e:
         console.print(f"\n[bold red]💥 An unexpected error occurred:[/bold red] {e}")
-        sys.exit(1)    
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

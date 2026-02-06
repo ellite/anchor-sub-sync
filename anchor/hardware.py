@@ -14,11 +14,6 @@ except ImportError:
 
 console = Console()
 
-import platform
-import subprocess
-import os
-import sys
-
 def get_cpu_name():
     """Return a best-effort CPU name string."""
     # 1. Try macOS (Darwin) specific command first
@@ -30,7 +25,7 @@ def get_cpu_name():
         except Exception:
             pass
 
-    # 2. Generic platform check (often returns just 'arm' or 'x86_64' on Mac)
+    # 2. Generic platform check
     try:
         name = platform.processor()
         if name and name.strip():
@@ -47,7 +42,7 @@ def get_cpu_name():
     except Exception:
         pass
 
-    # 4. python-cpuinfo fallback (if installed)
+    # 4. python-cpuinfo fallback
     try:
         import cpuinfo
         info = cpuinfo.get_cpu_info()
@@ -60,25 +55,18 @@ def get_cpu_name():
     return "CPU"
 
 def get_system_ram_gb():
-    """
-    Returns system RAM in GB.
-    """
-
+    """Returns system RAM in GB."""
     if psutil:
         return psutil.virtual_memory().available / (1024 ** 3)
     
-    # --- macOS Fallback (sysctl) ---
     if platform.system() == "Darwin":
         try:
-            # 'sysctl -n hw.memsize' returns total physical RAM in bytes
             cmd = ["sysctl", "-n", "hw.memsize"]
             total_bytes = int(subprocess.check_output(cmd).strip())
             return total_bytes / (1024 ** 3)
         except Exception:
-            print("Failed")
             pass
 
-    # --- Linux Fallback (/proc/meminfo) ---
     if os.path.exists("/proc/meminfo"):
         try:
             with open("/proc/meminfo", "r") as f:
@@ -89,18 +77,12 @@ def get_system_ram_gb():
         except Exception:
             pass
             
-    # Blind guess if we can't measure
     return 8.0
 
 def select_model_size(memory_gb, is_gpu=True):
     """
     Selects the best Whisper model based on available memory (GB).
-    
-    - GPU: Can go up to 'large-v3' if VRAM permits.
-    - CPU: Capped at 'medium'. 'large-v3' is too slow on CPU and 
-           benchmarks show 'medium' offers identical sync accuracy.
     """
-    # Safety buffer: OS needs more RAM buffer than GPU needs VRAM buffer
     buffer = 1.0 if is_gpu else 2.0 
     usable_mem = memory_gb - buffer
 
@@ -113,14 +95,42 @@ def select_model_size(memory_gb, is_gpu=True):
     else:
         return "base"
 
-def get_compute_device(force_model=None, force_batch=None):
+def select_translation_model(memory_gb, is_gpu=True):
     """
-    Detects hardware and selects optimal settings + model size.
+    Selects the best NLLB translation model based on memory.
+    Returns the HuggingFace ID for the CTranslate2 INT8 model.
+    """
+    # Specific Repos for CTranslate2 INT8 models
+    NLLB_600M = "softcatala/nllb-200-distilled-600M-ct2-int8" # ~0.6 GB VRAM
+    NLLB_1_3B = "OpenNMT/nllb-200-distilled-1.3B-ct2-int8"    # ~1.5 GB VRAM
+    NLLB_3_3B = "OpenNMT/nllb-200-3.3B-ct2-int8"              # ~3.5 GB VRAM
+
+    if not is_gpu:
+        # CPU is slower, stick to the lightweight distilled model unless lots of RAM
+        if memory_gb > 16:
+            return NLLB_1_3B
+        return NLLB_600M
+
+    # GPU Logic
+    # We apply a stricter buffer because we might want to load this alongside other things
+    # or ensure smoothness.
+    
+    if memory_gb >= 8:
+        return NLLB_3_3B # Best quality
+    elif memory_gb >= 4:
+        return NLLB_1_3B # Great balance (RTX 2000e target)
+    else:
+        return NLLB_600M # Fast
+
+def get_compute_device(force_model=None, force_batch=None, force_translation_model=None):
+    """
+    Detects hardware and selects optimal settings + Whisper model + Translation model.
     """
     device = "cpu"
     compute_type = "int8"
     batch_size = 4
     model_size = "base"
+    translation_model = "softcatala/nllb-200-distilled-600M-ct2-int8" # Default safe fallback
     
     # 1. Check for NVIDIA CUDA
     if torch.cuda.is_available():
@@ -129,6 +139,7 @@ def get_compute_device(force_model=None, force_batch=None):
             device = "cuda"
             compute_type = "float16" 
             model_size = "medium"
+            translation_model = select_translation_model(8, is_gpu=True) # Assume mid-range for AMD
         else:
             device_count = torch.cuda.device_count()
             min_mem_gb = 0
@@ -152,6 +163,7 @@ def get_compute_device(force_model=None, force_batch=None):
             compute_type = "float16"
             
             model_size = select_model_size(min_mem_gb, is_gpu=True)
+            translation_model = select_translation_model(min_mem_gb, is_gpu=True)
             
             # Select Batch Size
             if min_mem_gb >= 24:
@@ -165,7 +177,7 @@ def get_compute_device(force_model=None, force_batch=None):
 
     # 2. Check for Apple Silicon (Mac)
     elif torch.backends.mps.is_available():
-        # NOTE: CTranslate2 (backend of faster-whisper) does NOT support 'mps' device yet.
+        # NOTE: CTranslate2 (backend of faster-whisper/NLLB) does NOT support 'mps' device yet.
         # We must fall back to CPU.
         device = "cpu"
         compute_type = "int8"
@@ -174,7 +186,9 @@ def get_compute_device(force_model=None, force_batch=None):
         cpu_name = get_cpu_name()
         console.print(f"[bold cyan]🍎 Hardware Detected:[/bold cyan] Apple Silicon (Running on CPU {cpu_name})")
         console.print(f"[dim]   System RAM Available: {sys_ram:.1f} GB[/dim]")
+        
         model_size = select_model_size(sys_ram, is_gpu=False)
+        translation_model = select_translation_model(sys_ram, is_gpu=False)
 
     # 3. Check for Intel Arc / iGPU
     elif hasattr(torch, 'xpu') and torch.xpu.is_available():
@@ -183,6 +197,7 @@ def get_compute_device(force_model=None, force_batch=None):
          batch_size = 8
          console.print("[bold blue]🔵 Hardware Detected:[/bold blue] Intel Arc/XPU")
          model_size = "medium"
+         translation_model = select_translation_model(8, is_gpu=True) # Assume mid-range
 
     # 4. CPU Fallback
     else:
@@ -192,47 +207,76 @@ def get_compute_device(force_model=None, force_batch=None):
         console.print(f"[bold blue]🖥️ Hardware Detected:[/bold blue] CPU ({cpu_name})")
         console.print(f"[dim]   System RAM Available: {ram_gb:.1f} GB[/dim]")
 
-        # Select model based on RAM, but caps at "medium" via the function above
         model_size = select_model_size(ram_gb, is_gpu=False)
+        translation_model = select_translation_model(ram_gb, is_gpu=False)
 
-    # 5. User Override
+    # 5. User Overrides
+    # Model override
     if force_model:
         valid_models = [
-            "tiny", "base", "small", "medium", "large"
+            "tiny", "base", "small", "medium", "large",
             "large-v1", "large-v2", "large-v3",
             "distil-large-v2", "distil-medium.en", "distil-small.en",
             "distil-large-v3", "distil-large-v3.5",
             "large-v3-turbo", "turbo",
         ]
 
-        # Clean the input (e.g., "Medium" -> "medium")
         clean_model = force_model.lower().strip()
 
-        # Remove .en suffix if user included it (e.g., "medium.en" -> "medium"),
-        # but keep the suffix for distil variants which include language-specific names
         if clean_model.endswith(".en") and "distil" not in clean_model:
             clean_model = clean_model[:-3]
 
-        # Check that the model is a valid faster-whisper model size
         if clean_model not in valid_models:
             console.print(f"\n[bold red]❌ Invalid model name '{force_model}' provided![/bold red]")
             console.print(f"[dim]Valid options: {', '.join(valid_models)}[/dim]")
             sys.exit(1)
         
-        #console.print(f"[bold yellow]⚠️ User Override:[/bold yellow] Forcing model to [white]'{clean_model}'[/white]")
-        
-        # If the user specifically requested "large", map it to "large-v3" for valid WhisperX loading
         if clean_model == "large":
             clean_model = "large-v3"
             
         model_size = clean_model
 
-        # Check for batch size override
-        if force_batch:
-            if force_batch <= 0:
-                console.print(f"\n[bold red]❌ Invalid batch size '{force_batch}' provided! Must be a positive integer.[/bold red]")
-                sys.exit(1)
-            #console.print(f"[bold yellow]⚠️ User Override:[/bold yellow] Forcing batch size to [white]{force_batch}[/white]")
-            batch_size = force_batch
+    # Batch Size Override
+    if force_batch:
+        if force_batch <= 0:
+            console.print(f"\n[bold red]❌ Invalid batch size '{force_batch}' provided! Must be a positive integer.[/bold red]")
+            sys.exit(1)
+        batch_size = force_batch
 
-    return device, compute_type, batch_size, model_size
+    # Translation Model Override
+    if force_translation_model:
+        # 1. Define Aliases for ease of use
+        aliases = {
+            "small":  "softcatala/nllb-200-distilled-600M-ct2-int8",
+            "medium": "softcatala/nllb-200-1.3B-ct2-int8",
+            "large":  "OpenNMT/nllb-200-3.3B-ct2-int8",
+        }
+
+        # 2. Define the exact valid list (The Aliases + The Raw IDs)
+        valid_map = aliases.copy()
+        
+        # ...and add the raw strings from our valid list so they map to themselves
+        raw_valid_models = [
+            "softcatala/nllb-200-distilled-600M-ct2-int8",
+            "OpenNMT/nllb-200-distilled-600M-ct2-int8",
+            "softcatala/nllb-200-1.3B-ct2-int8",
+            "OpenNMT/nllb-200-distilled-1.3B-ct2-int8",
+            "OpenNMT/nllb-200-1.3B-ct2-int8",
+            "OpenNMT/nllb-200-3.3B-ct2-int8",
+        ]
+        
+        for m in raw_valid_models:
+            valid_map[m] = m
+
+        # 3. Validation Logic
+        clean_input = force_translation_model.strip()
+        
+        if clean_input not in valid_map:
+            console.print(f"\n[bold red]❌ Invalid translation model '{clean_input}' provided![/bold red]")
+            console.print(f"[dim]You can use aliases: [bold white]small, medium, large[/bold white][/dim]")
+            console.print(f"[dim]Or specific CTranslate2 repo IDs like 'OpenNMT/nllb-200-3.3B-ct2-int8'[/dim]")
+            sys.exit(1)
+            
+        translation_model = valid_map[clean_input]
+
+    return device, compute_type, batch_size, model_size, translation_model
