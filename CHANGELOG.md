@@ -2,6 +2,13 @@
 
 
 
+## v1.0.1 (2026-02-06)
+
+### Fix
+
+* fix: wrong var prevent push to pypi ([`fc37009`](https://github.com/ellite/anchor-sub-sync/commit/fc37009d9c5b89d211dcf40ea1403c1b1c7305bc))
+
+
 ## v1.0.0 (2026-02-06)
 
 ### Breaking
