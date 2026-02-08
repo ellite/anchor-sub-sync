@@ -1,6 +1,15 @@
-<p align="left">
-	<img src="./resources/anchorlogo.png" alt="Anchor logo" width="160" />
-</p>
+<div align="center">
+  <picture>
+    <img src="https://github.com/ellite/anchor-sub-sync/raw/main/resources/anchorlogo.png" alt="Anchor logo" width="160"
+  </picture>
+
+  <p>Anchor Subtitle Sync</p>
+
+  [![Stars](https://img.shields.io/github/stars/ellite/anchor-sub-sync?style=flat-square)](https://github.com/ellite/anchor-sub-sync)
+  [![Downloads](https://img.shields.io/pepy/dt/anchor-sub-sync?style=flat-square&color=green)](https://pepy.tech/project/anchor-sub-sync)
+  [![GitHub contributors](https://img.shields.io/github/contributors/ellite/anchor-sub-sync?style=flat-square)](https://github.com/ellite/anchor-sub-sync/graphs/contributors)
+  [![GitHub Sponsors](https://img.shields.io/github/sponsors/ellite?style=flat-square)](https://github.com/sponsors/ellite)
+</div>
 
 # ⚓ Anchor Subtitle Sync
 
@@ -97,7 +106,7 @@ For convenience, Anchor also supports shorthand names that map to reasonable def
 | Shorthand | Model |
 | --------- | ----- |
 | `small` | `JustFrederik/nllb-200-distilled-600M-ct2-int8` |
-| `medium` | `sOpenNMT/nllb-200-distilled-1.3B-ct2-int8` |
+| `medium` | `OpenNMT/nllb-200-distilled-1.3B-ct2-int8` |
 | `large` | `OpenNMT/nllb-200-3.3B-ct2-int8` |
 
 Example usages:
