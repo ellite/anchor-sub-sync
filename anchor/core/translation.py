@@ -18,8 +18,8 @@ def translate_subtitle_nllb(
     sub: pysubs2.SSAFile, 
     source_code: str, 
     target_code: str, 
-    device="cuda", 
-    model_id="OpenNMT/nllb-200-distilled-600M-ct2-int8"
+    device="cpu", 
+    model_id="JustFrederik/nllb-200-distilled-600M-ct2-int8"
 ) -> pysubs2.SSAFile:
     
     lines = []
@@ -47,7 +47,7 @@ def translate_subtitle_nllb(
             compute_type="int8"
         )
         
-        tokenizer = transformers.AutoTokenizer.from_pretrained(TOKENIZER_ID)
+        tokenizer = transformers.AutoTokenizer.from_pretrained(TOKENIZER_ID, src_lang=source_code)
 
         batch_size = 32
         translated_lines = []
@@ -80,7 +80,7 @@ def translate_subtitle_nllb(
         return ghost_sub
 
     except Exception as e:
-        console.print(f"[bold red]❌ Translation Failed:[/bold red] {e}")
+        console.print(f"\n[bold red]❌ Translation Failed:[/bold red] {e}")
         return sub
 
     finally:

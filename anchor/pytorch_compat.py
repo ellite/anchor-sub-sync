@@ -1,5 +1,4 @@
 import torch
-import warnings
 import inspect
 
 def apply_patches():

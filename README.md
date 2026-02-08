@@ -88,19 +88,16 @@ Supported Translation Models
 
 The following pre-built CTranslate2 models are supported and can be passed directly to `-t`:
 
-- `softcatala/nllb-200-distilled-600M-ct2-int8`
-- `OpenNMT/nllb-200-distilled-600M-ct2-int8`
-- `softcatala/nllb-200-1.3B-ct2-int8`
+- `JustFrederik/nllb-200-distilled-600M-ct2-int8`
 - `OpenNMT/nllb-200-distilled-1.3B-ct2-int8`
-- `OpenNMT/nllb-200-1.3B-ct2-int8`
 - `OpenNMT/nllb-200-3.3B-ct2-int8`
 
 For convenience, Anchor also supports shorthand names that map to reasonable defaults:
 
 | Shorthand | Model |
 | --------- | ----- |
-| `small` | `softcatala/nllb-200-distilled-600M-ct2-int8` |
-| `medium` | `softcatala/nllb-200-1.3B-ct2-int8` |
+| `small` | `JustFrederik/nllb-200-distilled-600M-ct2-int8` |
+| `medium` | `sOpenNMT/nllb-200-distilled-1.3B-ct2-int8` |
 | `large` | `OpenNMT/nllb-200-3.3B-ct2-int8` |
 
 Example usages:
@@ -157,11 +154,6 @@ Install the tool directly from the repository.
 
 ```bash
 pip install anchor-sub-sync
-```
-or
-
-```bash
-pip install git+https://github.com/ellite/anchor-sub-sync.git
 ```
 
 **⚠️ Important:** Because this tool relies on hardware acceleration, standard `pip install` often pulls the wrong drivers (CPU versions). If it does not work out of the box, please follow these steps in order.
@@ -258,6 +250,9 @@ You can override the automatic hardware detection or control specific settings u
 | --model | -m | Force a specific Whisper model (e.g., tiny, medium, large-v3-turbo). |
 | --batch-size | -b | Manually set the batch size (e.g., 8, 16). Useful for optimizing VRAM usage. |
 | --translation-model | -t | Force a specific translation model (overrides automatic selection). |
+| --subtitle | -s | Runs unattended sync on a single subtitle file (provide path to .srt, .ass, etc.) |
+| --reference | -r | For unattended sync, provide reference subtitle file path for point sync |
+| --video | -v | For unattended sync, provide path to the video file if the script fails to auto-match |
 | --help | -h  | Show the help message and exit. |
 
 Examples
@@ -279,6 +274,16 @@ Combine flags:
 
 ```bash
 anchor -m medium -b 16
+```
+
+Run unattended sync:
+
+```
+anchor -s A.3.Minutes.Example.Video.en.srt -v A.3.Minutes.Example.Video.mkv 
+```
+or
+```
+anchor -s A.3.Minutes.Example.Video.en.srt -r A.3.Minutes.Example.Video.pt.srt 
 ```
 
 ## ⚙️ Development

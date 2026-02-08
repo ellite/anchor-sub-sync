@@ -16,7 +16,7 @@ console = Console()
 
 def get_cpu_name():
     """Return a best-effort CPU name string."""
-    # 1. Try macOS (Darwin) specific command first
+    # Try macOS (Darwin) specific command first
     if platform.system() == "Darwin":
         try:
             command = ["/usr/sbin/sysctl", "-n", "machdep.cpu.brand_string"]
@@ -25,7 +25,7 @@ def get_cpu_name():
         except Exception:
             pass
 
-    # 2. Generic platform check
+    # Generic platform check
     try:
         name = platform.processor()
         if name and name.strip():
@@ -33,7 +33,7 @@ def get_cpu_name():
     except Exception:
         pass
     
-    # 3. Linux fallback
+    # Linux fallback
     try:
         with open("/proc/cpuinfo", "r") as f:
             for line in f:
@@ -42,7 +42,7 @@ def get_cpu_name():
     except Exception:
         pass
 
-    # 4. python-cpuinfo fallback
+    # python-cpuinfo fallback
     try:
         import cpuinfo
         info = cpuinfo.get_cpu_info()
@@ -101,7 +101,7 @@ def select_translation_model(memory_gb, is_gpu=True):
     Returns the HuggingFace ID for the CTranslate2 INT8 model.
     """
     # Specific Repos for CTranslate2 INT8 models
-    NLLB_600M = "softcatala/nllb-200-distilled-600M-ct2-int8" # ~0.6 GB VRAM
+    NLLB_600M = "JustFrederik/nllb-200-distilled-600M-ct2-int8" # ~0.6 GB VRAM
     NLLB_1_3B = "OpenNMT/nllb-200-distilled-1.3B-ct2-int8"    # ~1.5 GB VRAM
     NLLB_3_3B = "OpenNMT/nllb-200-3.3B-ct2-int8"              # ~3.5 GB VRAM
 
@@ -112,7 +112,7 @@ def select_translation_model(memory_gb, is_gpu=True):
         return NLLB_600M
 
     # GPU Logic
-    # We apply a stricter buffer because we might want to load this alongside other things
+    # Apply a stricter buffer because we might want to load this alongside other things
     # or ensure smoothness.
     
     if memory_gb >= 8:
@@ -130,16 +130,16 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
     compute_type = "int8"
     batch_size = 4
     model_size = "base"
-    translation_model = "softcatala/nllb-200-distilled-600M-ct2-int8" # Default safe fallback
+    translation_model = "JustFrederik/nllb-200-distilled-600M-ct2-int8" # Default safe fallback
     
-    # 1. Check for NVIDIA CUDA
+    # Check for NVIDIA CUDA
     if torch.cuda.is_available():
         if torch.version.hip:
             console.print("[bold red]🛑 Hardware Detected:[/bold red] AMD GPU (ROCm)")
             device = "cuda"
             compute_type = "float16" 
             model_size = "medium"
-            translation_model = select_translation_model(8, is_gpu=True) # Assume mid-range for AMD
+            translation_model = select_translation_model(8, is_gpu=True)
         else:
             device_count = torch.cuda.device_count()
             min_mem_gb = 0
@@ -175,10 +175,10 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
             else:
                 batch_size = 4
 
-    # 2. Check for Apple Silicon (Mac)
+    # Check for Apple Silicon (Mac)
     elif torch.backends.mps.is_available():
         # NOTE: CTranslate2 (backend of faster-whisper/NLLB) does NOT support 'mps' device yet.
-        # We must fall back to CPU.
+        # Must fall back to CPU.
         device = "cpu"
         compute_type = "int8"
         batch_size = 8
@@ -190,7 +190,7 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
         model_size = select_model_size(sys_ram, is_gpu=False)
         translation_model = select_translation_model(sys_ram, is_gpu=False)
 
-    # 3. Check for Intel Arc / iGPU
+    # Check for Intel Arc / iGPU
     elif hasattr(torch, 'xpu') and torch.xpu.is_available():
          device = "xpu"
          compute_type = "float16"
@@ -199,7 +199,7 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
          model_size = "medium"
          translation_model = select_translation_model(8, is_gpu=True) # Assume mid-range
 
-    # 4. CPU Fallback
+    # CPU Fallback
     else:
         cpu_name = get_cpu_name()
         ram_gb = get_system_ram_gb()
@@ -210,7 +210,7 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
         model_size = select_model_size(ram_gb, is_gpu=False)
         translation_model = select_translation_model(ram_gb, is_gpu=False)
 
-    # 5. User Overrides
+    # User Overrides
     # Model override
     if force_model:
         valid_models = [
@@ -245,30 +245,27 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
 
     # Translation Model Override
     if force_translation_model:
-        # 1. Define Aliases for ease of use
+        # Define Aliases for ease of use
         aliases = {
-            "small":  "softcatala/nllb-200-distilled-600M-ct2-int8",
-            "medium": "softcatala/nllb-200-1.3B-ct2-int8",
+            "small":  "JustFrederik/nllb-200-distilled-600M-ct2-int8",
+            "medium": "OpenNMT/nllb-200-distilled-1.3B-ct2-int8",
             "large":  "OpenNMT/nllb-200-3.3B-ct2-int8",
         }
 
-        # 2. Define the exact valid list (The Aliases + The Raw IDs)
+        # Define the exact valid list (The Aliases + The Raw IDs)
         valid_map = aliases.copy()
         
         # ...and add the raw strings from our valid list so they map to themselves
         raw_valid_models = [
-            "softcatala/nllb-200-distilled-600M-ct2-int8",
-            "OpenNMT/nllb-200-distilled-600M-ct2-int8",
-            "softcatala/nllb-200-1.3B-ct2-int8",
+            "JustFrederik/nllb-200-distilled-600M-ct2-int8",
             "OpenNMT/nllb-200-distilled-1.3B-ct2-int8",
-            "OpenNMT/nllb-200-1.3B-ct2-int8",
-            "OpenNMT/nllb-200-3.3B-ct2-int8",
+            "OpenNMT/nllb-200-3.3B-ct2-int8"
         ]
         
         for m in raw_valid_models:
             valid_map[m] = m
 
-        # 3. Validation Logic
+        # Validation Logic
         clean_input = force_translation_model.strip()
         
         if clean_input not in valid_map:
