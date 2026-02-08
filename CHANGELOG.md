@@ -2,6 +2,17 @@
 
 
 
+## v1.2.0 (2026-02-08)
+
+### Feature
+
+* feat: add point sync via a reference subtitle
+feat: add unattended mode
+feat: interactive file picker
+fix: translation model name
+chore: large refactor and modularization ([`c9f3ccf`](https://github.com/ellite/anchor-sub-sync/commit/c9f3ccfc9cdc2b1a529855d6c59cadd1a5b6c57e))
+
+
 ## v1.1.0 (2026-02-06)
 
 ### Feature
