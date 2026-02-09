@@ -38,7 +38,7 @@ def load_whisper_model(device, compute_type, language, model_size="large-v3"):
 
     return model
 
-def run_anchor_sync(video_path, sub_path, device, compute_type, batch_size, model, language=None):
+def run_anchor_sync(video_path, sub_path, device, compute_type, batch_size, model, language=None, args=None):
     safe_console = Console(force_terminal=True)
     try:
         audio = whisperx.load_audio(str(video_path))
@@ -167,7 +167,13 @@ def run_anchor_sync(video_path, sub_path, device, compute_type, batch_size, mode
     if synced_subs is None:
         raise Exception("Zero matches found.")
 
-    output_path = sub_path.with_name(f"{sub_path.stem}.synced{sub_path.suffix}")
+    # Respect overwrite flag: when args.overwrite is True, overwrite the input file
+    if args and getattr(args, "overwrite", False):
+        output_path = sub_path
+        console.print(f"[dim]💾 Overwriting original subtitle: {output_path.name}[/dim]")
+    else:
+        output_path = sub_path.with_name(f"{sub_path.stem}.synced{sub_path.suffix}")
+
     synced_subs.save(str(output_path))
     
     return output_path, len(original_subs), rejected

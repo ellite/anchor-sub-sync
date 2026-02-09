@@ -9,7 +9,7 @@ from ...utils.files import open_subtitle
 
 console = Console()
 
-def run_auto_linear_sync(target_file, reference_file, device="cpu", model_id="JustFrederik/nllb-200-distilled-600M-ct2-int8", console=console):
+def run_auto_linear_sync(target_file, reference_file, device="cpu", model_id="JustFrederik/nllb-200-distilled-600M-ct2-int8", console=console, args=None):
     """
     Automatically finds start/end matches and applies linear correction.
     """
@@ -87,8 +87,13 @@ def run_auto_linear_sync(target_file, reference_file, device="cpu", model_id="Ju
         console.print(f"   📐 Speed Factor: [cyan]{m:.6f}[/cyan]")
         console.print(f"   ⏱️  Offset:       [cyan]{c:.2f} ms[/cyan]")
 
-        # 6. Save
-        output_path = target_file.with_suffix(".synced.srt")
+        # Save (respect overwrite flag)
+        if args and getattr(args, "overwrite", False):
+            output_path = target_file
+            console.print(f"[dim]💾 Overwriting original subtitle: {output_path.name}[/dim]")
+        else:
+            output_path = target_file.with_suffix(".synced.srt")
+
         sub_target.save(str(output_path))
         console.print(f"💾 Saved to: [underline]{output_path.name}[/underline]")
 

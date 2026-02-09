@@ -28,6 +28,14 @@ def parse_arguments():
         default=None
     )
 
+    # Sync Options
+    parser.add_argument(
+        "-o", "--overwrite",
+        action="store_true",
+        help="Overwrite synced files without adding .synced suffix",
+        default=False
+    )
+
     # Automation / Files
     parser.add_argument(
         "-r", "--reference",

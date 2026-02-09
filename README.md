@@ -6,7 +6,7 @@
   <p>Anchor Subtitle Sync</p>
 
   [![Stars](https://img.shields.io/github/stars/ellite/anchor-sub-sync?style=flat-square)](https://github.com/ellite/anchor-sub-sync)
-  [![Downloads](https://img.shields.io/pepy/dt/anchor-sub-sync?style=flat-square&color=green)](https://pepy.tech/project/anchor-sub-sync)
+  [![Downloads](https://img.shields.io/pepy/dt/anchor-sub-sync?style=flat-square&color=blue)](https://pepy.tech/project/anchor-sub-sync)
   [![GitHub contributors](https://img.shields.io/github/contributors/ellite/anchor-sub-sync?style=flat-square)](https://github.com/ellite/anchor-sub-sync/graphs/contributors)
   [![GitHub Sponsors](https://img.shields.io/github/sponsors/ellite?style=flat-square)](https://github.com/sponsors/ellite)
 </div>
@@ -15,7 +15,7 @@
 
 **Anchor** is a GPU-accelerated tool that automatically synchronizes subtitle files (.srt, .ass) to video files using audio alignment. It uses OpenAI's Whisper (via WhisperX) to listen to the video track and perfectly align every subtitle line.
 
-## How It Works — Under the Hood
+## How It Works - Under the Hood
 
 A short summary: Anchor uses WhisperX plus a multi-stage elastic alignment pipeline (phoneme alignment, global fuzzy alignment, rolling-window drift correction, and timeline interpolation) to produce millisecond-accurate subtitle sync.
 
@@ -54,7 +54,7 @@ This tool performs a "fuzzy match" global alignment, mathematically calculating 
 
 🔍 Rolling Window Drift Filter: Over a long video, audio timing can "drift" (often due to frame rate conversions like 23.976fps vs 24fps). This step analyzes the timeline in moving segments to detect and correct gradual desynchronization before it becomes noticeable to the viewer.
 
-⚓️ Valid Anchors (e.g., 618 Anchors): The system identifies "Anchors"—points of absolute certainty where the audio and text match perfectly with high confidence.
+⚓️ Valid Anchors (e.g., 618 Anchors): The system identifies "Anchors"-points of absolute certainty where the audio and text match perfectly with high confidence.
 
 Rejection: It automatically discards "Outliers" (matches that seem statistically unlikely or erroneous), ensuring the timeline is pinned down only by high-quality data.
 
@@ -90,7 +90,7 @@ The result is your original subtitle text, timed accurately to the foreign-langu
 
 Anchor uses NLLB-200 (No Language Left Behind) via the `ctranslate2` engine for high speed and low memory usage. You can override the automatic choice with the `-t` / `--translation-model` flag.
 
-Note: The first time you use a translation model it will be downloaded automatically (approx. 1GB — 3.5GB depending on model). Models are cached locally for reuse.
+Note: The first time you use a translation model it will be downloaded automatically (approx. 1GB - 3.5GB depending on model). Models are cached locally for reuse.
 
 Supported Translation Models
 ----------------------------
@@ -188,7 +188,7 @@ Then install the appropriate build:
 pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu121
 ```
 
-- Apple Silicon (MPS) — follow PyTorch MPS instructions (example):
+- Apple Silicon (MPS) - follow PyTorch MPS instructions (example):
 
 ```bash
 pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/mps
@@ -237,6 +237,11 @@ If you see errors related to `numpy` (e.g., `module 'numpy' has no attribute...`
 pip install "numpy<2.0" "pandas<2.0"
 ```
 
+### _curses missing on windows ###
+```bash
+pip install windows-curses
+```
+
 ## 🎬 Usage
 
 Navigate to the folder containing your subtitles and video files, then run:
@@ -262,6 +267,7 @@ You can override the automatic hardware detection or control specific settings u
 | --subtitle | -s | Runs unattended sync on a single subtitle file (provide path to .srt, .ass, etc.) |
 | --reference | -r | For unattended sync, provide reference subtitle file path for point sync |
 | --video | -v | For unattended sync, provide path to the video file if the script fails to auto-match |
+| --overwrite | -o | Will overwrite the synced subtitle instead of saving it as file.synced.srt |
 | --help | -h  | Show the help message and exit. |
 
 Examples

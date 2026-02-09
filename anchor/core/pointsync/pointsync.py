@@ -25,7 +25,7 @@ def run_pointsync(args, mode, device="cpu", translation_model="JustFrederik/nllb
         console.print(f"   ⏱️ Reference:       [green]{reference_file}[/green]\n")
 
 
-        run_auto_linear_sync(target_file, reference_file, device, translation_model, console)
+        run_auto_linear_sync(target_file, reference_file, device, translation_model, console, args)
         
         return
 
@@ -82,8 +82,8 @@ def run_pointsync(args, mode, device="cpu", translation_model="JustFrederik/nllb
 
     if mode == "manual":
         # Launch the Dual-Pane TUI
-        run_manual_sync_tui(target_file, reference_file, console)
+        run_manual_sync_tui(target_file, reference_file, console, args)
         
     elif mode == "auto":
         # Launch the Auto Linear Sync flow
-        run_auto_linear_sync(target_file, reference_file, device, translation_model, console)
+        run_auto_linear_sync(target_file, reference_file, device, translation_model, console, args)

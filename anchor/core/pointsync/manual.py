@@ -5,7 +5,7 @@ from ...utils.files import open_subtitle
 
 console = Console()
 
-def run_manual_sync_tui(target_file, reference_file, console=console):
+def run_manual_sync_tui(target_file, reference_file, console=console, args=None):
     """
     Orchestrates the Manual Point Sync flow:
     """
@@ -68,10 +68,15 @@ def run_manual_sync_tui(target_file, reference_file, console=console):
     console.print(f"   📐 Speed Factor (Stretch): [cyan]{m:.6f}[/cyan]")
     console.print(f"   ⏱️  Offset (Shift):        [cyan]{c:.2f} ms[/cyan]")
 
-    # Save
-    output_path = target_file.with_suffix(".synced.srt")
+    # Save (respect overwrite flag)
+    if args and getattr(args, "overwrite", False):
+        output_path = target_file
+        console.print(f"[dim]💾 Overwriting original subtitle: {output_path.name}[/dim]")
+    else:
+        output_path = target_file.with_suffix(".synced.srt")
+
     sub_target.save(str(output_path))
-    
+
     console.print(f"\n[bold green]✅ Sync Complete![/bold green]")
     console.print(f"💾 Saved to: [underline]{output_path.name}[/underline]")
 

@@ -188,7 +188,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
         start_time = time.time()
         try:
             # Call the Core Logic
-            out_path, lines, rejected = run_anchor_sync(vid, sub_input_for_sync, device, compute_type, batch_size, current_model, meta_lang)
+            out_path, lines, rejected = run_anchor_sync(vid, sub_input_for_sync, device, compute_type, batch_size, current_model, meta_lang, args)
             
             # Restoration Logic
             final_output_path = out_path # Default
@@ -204,8 +204,13 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                     orig_event.start = ghost_event.start
                     orig_event.end = ghost_event.end
                 
-                # Determine final name
-                final_output_path = sub.with_suffix(".synced.srt")
+                # Determine final name (respect overwrite flag)
+                if args and getattr(args, "overwrite", False):
+                    final_output_path = sub
+                    console.print(f"[dim]💾 Overwriting original subtitle: {final_output_path.name}[/dim]")
+                else:
+                    final_output_path = sub.with_suffix(".synced.srt")
+
                 original_sub_object.save(str(final_output_path))
                 console.print(f"💾 Restored Original Content to: [underline]{final_output_path.name}[/underline]")
                 
