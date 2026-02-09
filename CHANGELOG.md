@@ -2,6 +2,17 @@
 
 
 
+## v1.3.0 (2026-02-09)
+
+### Chore
+
+* chore: add badges to readme ([`b90cb6e`](https://github.com/ellite/anchor-sub-sync/commit/b90cb6ee9440009b3f228dc2fd8cefbcd77fb7fd))
+
+### Feature
+
+* feat: add -o / --overwrite flag to overwrite the original subtitle ([`054580f`](https://github.com/ellite/anchor-sub-sync/commit/054580f3a49e3344cb07e5a29f0a6b3efc1dbb0f))
+
+
 ## v1.2.0 (2026-02-08)
 
 ### Feature
