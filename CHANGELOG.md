@@ -2,6 +2,14 @@
 
 
 
+## v1.4.0 (2026-02-11)
+
+### Feature
+
+* feat: translate subtitles
+feat: select all / none on file picker ([`5e72e85`](https://github.com/ellite/anchor-sub-sync/commit/5e72e85554ee531ef531c400014f9e6a9f774fa5))
+
+
 ## v1.3.0 (2026-02-09)
 
 ### Chore
