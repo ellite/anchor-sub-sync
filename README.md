@@ -3,7 +3,7 @@
     <img src="https://github.com/ellite/anchor-sub-sync/raw/main/resources/anchorlogo.png" alt="Anchor logo" width="160"
   </picture>
 
-  <p>Anchor Subtitle Sync</p>
+  <p>Anchor Sub Sync</p>
 
   [![Stars](https://img.shields.io/github/stars/ellite/anchor-sub-sync?style=flat-square)](https://github.com/ellite/anchor-sub-sync)
   [![Downloads](https://img.shields.io/pepy/dt/anchor-sub-sync?style=flat-square&color=blue)](https://pepy.tech/project/anchor-sub-sync)
@@ -11,9 +11,17 @@
   [![GitHub Sponsors](https://img.shields.io/github/sponsors/ellite?style=flat-square)](https://github.com/sponsors/ellite)
 </div>
 
-# ⚓ Anchor Subtitle Sync
+# ⚓ Anchor Sub Sync
 
-**Anchor** is a GPU-accelerated tool that automatically synchronizes subtitle files (.srt, .ass) to video files using audio alignment. It uses OpenAI's Whisper (via WhisperX) to listen to the video track and perfectly align every subtitle line.
+**Anchor** is a GPU-accelerated tool that automatically synchronizes subtitle files (.srt, .ass) to video files using audio alignment. It uses OpenAI's Whisper (via WhisperX) to listen to the video track, applies some alignment techniques and perfectly align every subtitle line.
+
+
+⚡ Core Capabilities
+
+- 🔊 **Audio Sync**: Auto-align subtitles to video using Whisper (no reference text needed).
+- 📍 **Point Sync**: Fix linear drift by matching distinct lines against a reference subtitle.
+- 🌐 **Translation**: Context-aware translation using NLLB, with dual-speaker preservation and auto-formatting.
+- Coming soon: 📝 **Transcriptions**: Generate subtitles directly from the video.
 
 ## How It Works - Under the Hood
 
@@ -344,3 +352,7 @@ To remove model caches or large downloaded files, delete the relevant cache dire
 ```bash
 rm -rf ~/.cache/whisper ~/.cache/whisperx
 ```
+
+## ⚓ Links
+- [GitHub](https://github.com/ellite/anchor-sub-sync)
+- [PyPI](https://pypi.org/project/anchor-sub-sync/)
