@@ -250,10 +250,6 @@ Navigate to the folder containing your subtitles and video files, then run:
 anchor
 ```
 
-1.  **Select files:** Type `1` (specific file), `1-3` (range), or hit `Enter` to sync ALL subtitles in the folder.
-2.  **Wait:** Anchor will transcribe the audio and align the subtitles.
-3.  **Result:** A new `.synced.srt` file will be created next to the original.
-
 Command line options
 --------------------
 
@@ -269,6 +265,7 @@ You can override the automatic hardware detection or control specific settings u
 | --video | -v | For unattended sync, provide path to the video file if the script fails to auto-match |
 | --overwrite | -o | Will overwrite the synced subtitle instead of saving it as file.synced.srt |
 | --help | -h  | Show the help message and exit. |
+| --language | -l | For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation |
 
 Examples
 --------
@@ -293,12 +290,19 @@ anchor -m medium -b 16
 
 Run unattended sync:
 
-```
+```bash
 anchor -s A.3.Minutes.Example.Video.en.srt -v A.3.Minutes.Example.Video.mkv 
 ```
-or
-```
+
+Run unattended point sync:
+
+```bash
 anchor -s A.3.Minutes.Example.Video.en.srt -r A.3.Minutes.Example.Video.pt.srt 
+```
+Run unattended translation:
+
+```bash
+anchor -s A.3.Minutes.Example.Video.en.srt -l pt 
 ```
 
 ## ⚙️ Development
