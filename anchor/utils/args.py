@@ -55,5 +55,11 @@ def parse_arguments():
         help="For unattended sync, provide path to the video file if the script fails to auto-match",
         default=None
     )
+    parser.add_argument(
+        "-l", "--language",
+        type=str,
+        help="For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation",
+        default=None
+    )
     
     return parser.parse_args()

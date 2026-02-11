@@ -1,6 +1,6 @@
 import difflib
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, BarColumn, TaskProgressColumn
 from .common import get_filtered_lines, apply_linear_correction
 from ...utils.languages import get_subtitle_language
 from ...utils.mappings import get_language_code_for_nllb
@@ -33,13 +33,26 @@ def run_auto_linear_sync(target_file, reference_file, device="cpu", model_id="Ju
     if lang_target != lang_ref and lang_target != "unknown":
         console.print(f"[yellow]⚠️ Language mismatch: Target ({lang_target.upper()}) vs Ref ({lang_ref.upper()})[/yellow]")
         
-        # reuse your translation logic
         nllb_src = get_language_code_for_nllb(lang_target)
         nllb_tgt = get_language_code_for_nllb(lang_ref)
         
-        with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), TimeElapsedColumn(), transient=True) as progress:
-            progress.add_task("Translating...", total=None)
-            search_sub = translate_subtitle_nllb(sub_target, nllb_src, nllb_tgt, device=device, model_id=model_id)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),      
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            transient=True) as progress:
+                task = progress.add_task("Translating...", total=None)
+                search_sub = translate_subtitle_nllb(
+                    sub_target,
+                    nllb_src,
+                    nllb_tgt,
+                    device=device,
+                    model_id=model_id,
+                    progress=progress,
+                    task_id=task
+                ) 
 
         console.print(f"[dim]🔄 Translation complete ({lang_target.upper()} -> {lang_ref.upper()})[/dim]")
 

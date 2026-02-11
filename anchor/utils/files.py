@@ -148,7 +148,10 @@ def _picker_loop(stdscr, options, title, multi_select, header_lines):
         start_y += 1
         
         # Instructions (Dimmed)
-        instr = "   [↑/↓] Navigate   [Space] Select   [Enter] Confirm"
+        if multi_select:
+            instr = "   [↑/↓] Navigate   [Space] Toggle Select   [TAB] Select All/None   [Enter] Confirm"
+        else:
+            instr = "   [↑/↓] Navigate   [Space] Select   [Enter] Confirm"
         stdscr.addstr(start_y, 0, instr, curses.color_pair(5) | curses.A_DIM)
         start_y += 1
         
@@ -221,6 +224,11 @@ def _picker_loop(stdscr, options, title, multi_select, header_lines):
                     selected_indices.add(current_row)
             else:
                 return [current_row] # Single select confirms immediately
+        elif multi_select and key == 9: # TAB for Select All/None
+            if len(selected_indices) == len(options):
+                selected_indices.clear()
+            else:
+                selected_indices = set(range(len(options)))     
         elif key == 10: # Enter
             if selected_indices:
                 # Return explicitly checked items

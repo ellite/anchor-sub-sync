@@ -10,7 +10,7 @@ def select_run_mode():
     Displays the Main Menu inline with better styling.
     """
     
-    console.print("\n[bold cyan]⚡ Select Sync Mode[/bold cyan]")
+    console.print("\n[bold cyan]⚡ Select task[/bold cyan]")
     menu = Table(box=False, show_header=False, padding=(0, 1))
     menu.add_column("Icon", style="bold cyan", width=3, justify="right")
     menu.add_column("Opt", width=2, justify="center")
@@ -21,14 +21,21 @@ def select_run_mode():
         "1.", 
         "🔊", 
         "Audio Sync", 
-        "(Automatic via Whisper)"
+        "(Automatic Sync via Whisper)"
     )
 
     menu.add_row(
         "2.", 
         "📍", 
         "Point Sync", 
-        "(Manual/Ref via Subtitle)"
+        "(Sync via reference Subtitle)"
+    )
+
+    menu.add_row(
+        "3.",
+        "🌐",
+        "Translate",
+        "(Translate subtitle text to another language)"
     )
 
     console.print(menu)
@@ -36,7 +43,7 @@ def select_run_mode():
 
     choice = Prompt.ask(
         "[bold]Select Mode[/bold]", 
-        choices=["1", "2"], 
+        choices=["1", "2", "3"], 
         default="1",
         show_choices=False,
         show_default=True
@@ -46,6 +53,8 @@ def select_run_mode():
         return "audio"
     elif choice == "2":
         return "point"
+    elif choice == "3":
+        return "translate"
     
     return None
 

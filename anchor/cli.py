@@ -10,6 +10,7 @@ from .utils.validations import check_dependencies
 from .utils.selections import select_run_mode, select_pointsync_mode
 from .core.audiosync.audiosync import run_audiosync
 from .core.pointsync.pointsync import run_pointsync
+from .core.translate.translate import run_translation
 from . import __version__
 
 console = Console()
@@ -40,6 +41,9 @@ def main():
             # If -r / --reference is provided together with -s, it's a point sync    
             elif args.reference:
                 run_pointsync(args, "auto", device, translation_model, console)
+            # if -l / --language is provided together with -s, it's a translation 
+            elif args.language:
+                run_translation(args, device, translation_model, console)
             # If only -s is provided, it will run unattended mode and try to auto-match the video file
             else:
                 run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console)
@@ -50,7 +54,9 @@ def main():
                 run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console)
             elif (mode == "point"):
                 point_mode = select_pointsync_mode()
-                run_pointsync(args, point_mode, device, translation_model, console)       
+                run_pointsync(args, point_mode, device, translation_model, console)
+            elif (mode == "translate"):
+                run_translation(args, device, translation_model, console)
 
     except KeyboardInterrupt:
         console.print("\n[bold red]✖  Aborted by user.[/bold red]")

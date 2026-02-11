@@ -4,7 +4,7 @@ import gc
 import torch
 import pysubs2
 from pathlib import Path
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, BarColumn, TaskProgressColumn
 from ...utils.files import get_files, find_best_video_match, select_video_fallback, open_subtitle, select_files_interactive
 from ...utils.mappings import get_language_code_for_nllb
 from ...utils.languages import get_audio_language, get_subtitle_language
@@ -138,19 +138,23 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
             
             with Progress(
                 SpinnerColumn("dots"),
-                TextColumn(status_msg),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),      
+                TaskProgressColumn(),
                 TimeElapsedColumn(),
                 console=console,
                 transient=True        
             ) as progress:
-                progress.add_task("", total=None)
+                task = progress.add_task("Translating", total=None)
                 
                 ghost_sub = translate_subtitle_nllb(
                     original_sub_object, 
                     nllb_source, 
                     nllb_target, 
                     device=device, 
-                    model_id=translation_model
+                    model_id=translation_model,
+                    progress=progress,
+                    task_id=task
                 )
             
             console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {meta_lang.upper()}).[/dim]")
