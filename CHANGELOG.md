@@ -2,6 +2,20 @@
 
 
 
+## v1.5.0 (2026-02-22)
+
+### Chore
+
+* chore: update readme ([`9b2635a`](https://github.com/ellite/anchor-sub-sync/commit/9b2635a35a81578ac5fd12987dd75db4ef9fca90))
+
+* chore: update readme ([`74fb4db`](https://github.com/ellite/anchor-sub-sync/commit/74fb4db8e22b32a9063c29590e5ee0f1afed76c3))
+
+### Feature
+
+* feat: transcribe from video file into srt
+fix: batch audio sync ([`9f4d2f0`](https://github.com/ellite/anchor-sub-sync/commit/9f4d2f0d1f92ee7b25b443ce3a4f70728bbdf96b))
+
+
 ## v1.4.0 (2026-02-11)
 
 ### Feature
