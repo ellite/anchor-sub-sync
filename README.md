@@ -23,6 +23,7 @@
 - 🌐 **Translation**: Context-aware translation using NLLB, with dual-speaker preservation and auto-formatting.
 - 📝 **Transcriptions**: Generate subtitles directly from the video.
 - 📦 **Container Tasks**: Extract, Embed, or Strip subtitles from media
+- 🔥 **Burn-in***: Permanently burn subtitles into video
 
 ## How It Works - Under the Hood
 

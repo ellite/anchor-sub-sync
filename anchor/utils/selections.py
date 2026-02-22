@@ -52,12 +52,20 @@ def select_run_mode():
         "(Extract, Embed, or Strip subtitles from media)"
     )
 
+    # Burn subtitle to vide
+    menu.add_row(
+        "6.",
+        "🔥",
+        "Burn-in",
+        "(Permanently burn subtitles into video)"
+    )
+
     console.print(menu)
     console.print("")
 
     choice = Prompt.ask(
         "[bold]Select Mode[/bold]", 
-        choices=["1", "2", "3", "4", "5"], 
+        choices=["1", "2", "3", "4", "5", "6"], 
         default="1",
         show_choices=False,
         show_default=True
@@ -73,6 +81,8 @@ def select_run_mode():
         return "transcribe"
     elif choice == "5":
         return "container"
+    elif choice == "6":
+        return "burn"
     
     return None
 
