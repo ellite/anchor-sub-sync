@@ -2,6 +2,13 @@
 
 
 
+## v1.6.0 (2026-02-22)
+
+### Feature
+
+* feat: container tasks: extract, embed and strip subtitles from the container file ([`7e95624`](https://github.com/ellite/anchor-sub-sync/commit/7e95624a7dfce9440f67b8d56a3a2479f7b1e239))
+
+
 ## v1.5.0 (2026-02-22)
 
 ### Chore
