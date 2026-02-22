@@ -208,5 +208,4 @@ __marimo__/
 
 
 # Test Files
-A.44.Minute.Example.Video*
-A.3.Minutes.Example.Video*
+A.*.Minute*

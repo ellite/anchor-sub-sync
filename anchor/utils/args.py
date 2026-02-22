@@ -10,7 +10,7 @@ def parse_arguments():
     
     # Model Configuration
     parser.add_argument(
-        "-m", "--model", 
+        "-a", "--audio-model", 
         type=str, 
         help="Force a specific model size (e.g., tiny, base, small, medium, large-v3)",
         default=None

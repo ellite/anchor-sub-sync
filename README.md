@@ -21,7 +21,7 @@
 - 🔊 **Audio Sync**: Auto-align subtitles to video using Whisper (no reference text needed).
 - 📍 **Point Sync**: Fix linear drift by matching distinct lines against a reference subtitle.
 - 🌐 **Translation**: Context-aware translation using NLLB, with dual-speaker preservation and auto-formatting.
-- Coming soon: 📝 **Transcriptions**: Generate subtitles directly from the video.
+- 📝 **Transcriptions**: Generate subtitles directly from the video.
 
 ## How It Works - Under the Hood
 
@@ -265,7 +265,7 @@ You can override the automatic hardware detection or control specific settings u
 
 | Option | Alias | Description |
 | ------ | ----- | ----------- |
-| --model | -m | Force a specific Whisper model (e.g., tiny, medium, large-v3-turbo). |
+| --audio-model | -a | Force a specific Whisper model (e.g., tiny, medium, large-v3-turbo). |
 | --batch-size | -b | Manually set the batch size (e.g., 8, 16). Useful for optimizing VRAM usage. |
 | --translation-model | -t | Force a specific translation model (overrides automatic selection). |
 | --subtitle | -s | Runs unattended sync on a single subtitle file (provide path to .srt, .ass, etc.) |
@@ -281,7 +281,7 @@ Examples
 Force a specific model:
 
 ```bash
-anchor --model large-v3-turbo
+anchor --audio-model large-v3-turbo
 ```
 
 Force batch size (to prevent crashes or increase speed):
@@ -293,7 +293,7 @@ anchor --batch-size 8
 Combine flags:
 
 ```bash
-anchor -m medium -b 16
+anchor -a medium -b 16
 ```
 
 Run unattended sync:

@@ -38,12 +38,19 @@ def select_run_mode():
         "(Translate subtitle text to another language)"
     )
 
+    menu.add_row(
+        "4.",
+        "📝",
+        "Transcribe",
+        "(Generate subtitles from video/audio)"
+    )
+
     console.print(menu)
     console.print("")
 
     choice = Prompt.ask(
         "[bold]Select Mode[/bold]", 
-        choices=["1", "2", "3"], 
+        choices=["1", "2", "3", "4"], 
         default="1",
         show_choices=False,
         show_default=True
@@ -55,6 +62,8 @@ def select_run_mode():
         return "point"
     elif choice == "3":
         return "translate"
+    elif choice == "4":
+        return "transcribe"
     
     return None
 

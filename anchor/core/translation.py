@@ -140,8 +140,10 @@ def translate_subtitle_nllb(
 
     try:
         # Download model
+        progress.update(task_id, description="Loading Model...", advance=0)
         model_path = snapshot_download(repo_id=model_id)
         
+        progress.update(task_id, description="Translating...", advance=0)
         # Initialize CTranslate2
         translator = ctranslate2.Translator(
             model_path, 
@@ -149,10 +151,10 @@ def translate_subtitle_nllb(
             compute_type="int8"
         )
         
-        # Initialize Tokenizer (Exact setup as your script)
+        # Initialize Tokenizer
         tokenizer = transformers.AutoTokenizer.from_pretrained(TOKENIZER_ID)
         
-        # Explicitly set lang attributes (just like your script)
+        # Explicitly set lang attributes
         tokenizer.src_lang = source_code
         tokenizer.tgt_lang = target_code
         

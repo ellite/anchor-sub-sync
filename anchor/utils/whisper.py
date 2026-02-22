@@ -13,9 +13,10 @@ from .alignment import GlobalAligner
 console = Console()
 
 def load_whisper_model(device, compute_type, language, model_size="large-v3"):
-    # Safe console capture
+    # Safe console capture: duplicate stdout and wrap in a file object
     real_stdout_fd = os.dup(1)
-    safe_console = Console(file=os.fdopen(real_stdout_fd, "w"))
+    safe_file = os.fdopen(real_stdout_fd, "w")
+    safe_console = Console(file=safe_file)
 
     model = None
     try:
@@ -33,8 +34,18 @@ def load_whisper_model(device, compute_type, language, model_size="large-v3"):
             
             safe_console.print("[dim]🤖 Model loaded.[/dim]")
     finally:
-        try: os.close(real_stdout_fd)
-        except: pass
+        try:
+            if safe_console and getattr(safe_console, 'file', None):
+                try:
+                    safe_console.file.flush()
+                except Exception:
+                    pass
+                try:
+                    safe_console.file.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     return model
 

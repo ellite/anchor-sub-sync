@@ -11,6 +11,7 @@ from .utils.selections import select_run_mode, select_pointsync_mode
 from .core.audiosync.audiosync import run_audiosync
 from .core.pointsync.pointsync import run_pointsync
 from .core.translate.translate import run_translation
+from .core.transcribe.transcribe import run_transcription
 from . import __version__
 
 console = Console()
@@ -25,7 +26,7 @@ def main():
         console.print(f"[bold blue]🎬 Anchor Subtitle Sync {__version__}[/bold blue]\n")
 
         # Hardware Check
-        device, compute_type, batch_size, model_size, translation_model = get_compute_device(force_model=args.model, force_batch=args.batch_size, force_translation_model=args.translation_model)
+        device, compute_type, batch_size, model_size, translation_model = get_compute_device(force_model=args.audio_model, force_batch=args.batch_size, force_translation_model=args.translation_model)
         console.print(f"[dim]Engine configured for: [bold white]{device}[/bold white] (model: {model_size}, precision: {compute_type}, batch size: {batch_size}, translation model: {translation_model})[/dim]\n")
 
         # Dependency Check
@@ -47,6 +48,10 @@ def main():
             # If only -s is provided, it will run unattended mode and try to auto-match the video file
             else:
                 run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console)
+        elif args.video:
+            # If only -v / --video is provided, it will run transcription in unattended mode
+            run_transcription(args, device, model_size, compute_type, console)
+
         else:
             # Interactive mode
             mode = select_run_mode()
@@ -57,6 +62,8 @@ def main():
                 run_pointsync(args, point_mode, device, translation_model, console)
             elif (mode == "translate"):
                 run_translation(args, device, translation_model, console)
+            elif (mode == "transcribe"):
+                run_transcription(args, device, model_size, compute_type, console)
 
     except KeyboardInterrupt:
         console.print("\n[bold red]✖  Aborted by user.[/bold red]")
