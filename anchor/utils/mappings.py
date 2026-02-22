@@ -1,10 +1,56 @@
 ISO_639_MAPPING = {
-    'eng': 'en', 'spa': 'es', 'fra': 'fr', 'deu': 'de', 'ita': 'it',
-    'por': 'pt', 'jpn': 'ja', 'zho': 'zh', 'chi': 'zh', 'rus': 'ru',
-    'kor': 'ko', 'nld': 'nl', 'swe': 'sv', 'nor': 'no', 'dan': 'da',
-    'fin': 'fi', 'tur': 'tr', 'pol': 'pl', 'ukr': 'uk', 'ara': 'ar',
-    'hin': 'hi', 'vie': 'vi', 'tha': 'th', 'ind': 'id'
+    # Most Common
+    'eng': 'en', 'spa': 'es', 'fra': 'fr', 'fre': 'fr', 'deu': 'de', 'ger': 'de',
+    'ita': 'it', 'por': 'pt', 'jpn': 'ja', 'zho': 'zh', 'chi': 'zh', 'rus': 'ru',
+    'kor': 'ko', 'nld': 'nl', 'dut': 'nl', 'swe': 'sv', 'nor': 'no', 'dan': 'da',
+    'fin': 'fi', 'tur': 'tr', 'pol': 'pl', 'ukr': 'uk', 'ara': 'ar', 'hin': 'hi',
+    'vie': 'vi', 'tha': 'th', 'ind': 'id',
+
+    # Expanded / NLLB Coverage
+    'afr': 'af', 'amh': 'am', 'aze': 'az', 'bel': 'be', 'bul': 'bg', 'ben': 'bn',
+    'bos': 'bs', 'cat': 'ca', 'ces': 'cs', 'cze': 'cs', 'cym': 'cy', 'wel': 'cy',
+    'ell': 'el', 'gre': 'el', 'est': 'et', 'eus': 'eu', 'baq': 'eu', 'fas': 'fa',
+    'per': 'fa', 'glg': 'gl', 'guj': 'gu', 'heb': 'he', 'hrv': 'hr', 'hun': 'hu',
+    'hye': 'hy', 'arm': 'hy', 'isl': 'is', 'ice': 'is', 'jav': 'jv', 'kat': 'ka',
+    'geo': 'ka', 'kaz': 'kk', 'khm': 'km', 'kan': 'kn', 'lao': 'lo', 'lit': 'lt',
+    'lav': 'lv', 'mkd': 'mk', 'mac': 'mk', 'mal': 'ml', 'mon': 'mn', 'mar': 'mr',
+    'msa': 'ms', 'may': 'ms', 'mya': 'my', 'bur': 'my', 'ori': 'or', 'pan': 'pa',
+    'pus': 'ps', 'ron': 'ro', 'rum': 'ro', 'snd': 'sd', 'sin': 'si', 'slk': 'sk',
+    'slo': 'sk', 'slv': 'sl', 'som': 'so', 'sqi': 'sq', 'alb': 'sq', 'srp': 'sr',
+    'swa': 'sw', 'tam': 'ta', 'tel': 'te', 'tgl': 'tl', 'urd': 'ur', 'uzb': 'uz',
+    'yor': 'yo', 'zul': 'zu'
 }
+
+def normalize_language_code(lang_code: str) -> str:
+    """
+    Converts 3-letter ISO 639-2 container codes to 2-letter ISO 639-1 codes.
+    Returns the original code if not found in the mapping.
+    """
+    if not lang_code: return "und"
+    lang_code = lang_code.lower().strip()
+    return ISO_639_MAPPING.get(lang_code, lang_code)
+
+def get_iso_639_2_code(lang_code: str) -> str:
+    """Converts 2-letter ISO 639-1 codes to 3-letter ISO 639-2 container codes."""
+    if not lang_code: return "und"
+    lang_code = lang_code.lower().strip()
+    
+    # If it's already a 3-letter code, return it
+    if len(lang_code) == 3: return lang_code
+    
+    # Safe reverse lookup for common languages
+    reverse_map = {
+        'en': 'eng', 'es': 'spa', 'fr': 'fra', 'de': 'deu', 'it': 'ita',
+        'pt': 'por', 'ja': 'jpn', 'zh': 'zho', 'ru': 'rus', 'ko': 'kor',
+        'nl': 'nld', 'sv': 'swe', 'no': 'nor', 'da': 'dan', 'fi': 'fin',
+        'tr': 'tur', 'pl': 'pol', 'uk': 'ukr', 'ar': 'ara', 'hi': 'hin',
+        'vi': 'vie', 'th': 'tha', 'id': 'ind', 'cs': 'ces', 'el': 'ell',
+        'he': 'heb', 'ro': 'ron', 'sk': 'slk', 'bg': 'bul', 'hr': 'hrv',
+        'hu': 'hun', 'sr': 'srp', 'ca': 'cat', 'is': 'isl', 'fa': 'fas',
+        'et': 'est', 'lv': 'lav', 'lt': 'lit', 'sl': 'slv', 'ur': 'urd'
+    }
+    
+    return reverse_map.get(lang_code, "und")    
 
 def get_language_code_for_nllb(iso_code: str) -> str:
     """

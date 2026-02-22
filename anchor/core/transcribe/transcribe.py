@@ -892,14 +892,14 @@ def run_transcription(args, device, model_size, compute_type, console: Console):
         detected_lang = None
         if hasattr(args, 'language') and args.language:
             detected_lang = args.language
-            console.print(f"\n   [dim]🌍 Language (Forced): {detected_lang.upper()}[/dim]")
+            console.print(f"\n   🌍 Language: [dim] {detected_lang.upper()} (Forced)[/dim]")
         else:
             try:
                 detected_lang = get_audio_language(input_path)
                 if detected_lang == "unknown": 
                     detected_lang = None
                 else:
-                    console.print(f"\n   [dim]🌍 Language (Detected): {detected_lang.upper()}[/dim]")
+                    console.print(f"\n   🌍 Language: [dim] {detected_lang.upper()} (Detected)[/dim]")
             except: 
                 detected_lang = None
 

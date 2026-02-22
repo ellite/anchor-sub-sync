@@ -12,8 +12,8 @@ def select_run_mode():
     
     console.print("\n[bold cyan]⚡ Select task[/bold cyan]")
     menu = Table(box=False, show_header=False, padding=(0, 1))
-    menu.add_column("Icon", style="bold cyan", width=3, justify="right")
-    menu.add_column("Opt", width=2, justify="center")
+    menu.add_column("Opt", style="bold cyan", width=3, justify="right")
+    menu.add_column("Icon", width=2, justify="center")
     menu.add_column("Name", style="bold white")
     menu.add_column("Desc", style="dim white")
 
@@ -45,12 +45,19 @@ def select_run_mode():
         "(Generate subtitles from video/audio)"
     )
 
+    menu.add_row(
+        "5.",
+        "📦",
+        "Container Tasks",
+        "(Extract, Embed, or Strip subtitles from media)"
+    )
+
     console.print(menu)
     console.print("")
 
     choice = Prompt.ask(
         "[bold]Select Mode[/bold]", 
-        choices=["1", "2", "3", "4"], 
+        choices=["1", "2", "3", "4", "5"], 
         default="1",
         show_choices=False,
         show_default=True
@@ -64,6 +71,58 @@ def select_run_mode():
         return "translate"
     elif choice == "4":
         return "transcribe"
+    elif choice == "5":
+        return "container"
+    
+    return None
+
+
+def select_container_mode():
+    console.print("\n[bold cyan]📦 Select Container Task[/bold cyan]")
+    menu = Table(box=False, show_header=False, padding=(0, 1))
+    menu.add_column("Opt", style="bold cyan", width=3, justify="right")
+    menu.add_column("Icon", width=2, justify="center")
+    menu.add_column("Name", style="bold white")
+    menu.add_column("Desc", style="dim white")
+
+    menu.add_row(
+        "1.", 
+        "🧲", 
+        "Extract", 
+        "(Extract embedded subtitles from media)"
+    )
+
+    menu.add_row(
+        "2.", 
+        "🧩", 
+        "Embed", 
+        "(Embed external subtitles into media)"
+    )
+
+    menu.add_row(
+        "3.",
+        "🧹",
+        "Strip",
+        "(Remove embedded subtitles from media)"
+    )
+
+    console.print(menu)
+    console.print("")
+
+    choice = Prompt.ask(
+        "[bold]Select Task[/bold]", 
+        choices=["1", "2", "3"], 
+        default="1",
+        show_choices=False,
+        show_default=True
+    )
+
+    if choice == "1":
+        return "extract"
+    elif choice == "2":
+        return "embed"
+    elif choice == "3":
+        return "strip"
     
     return None
 

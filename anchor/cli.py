@@ -7,11 +7,12 @@ from rich.console import Console
 from .hardware import get_compute_device
 from .utils.args import parse_arguments
 from .utils.validations import check_dependencies
-from .utils.selections import select_run_mode, select_pointsync_mode
+from .utils.selections import select_container_mode, select_run_mode, select_pointsync_mode
 from .core.audiosync.audiosync import run_audiosync
 from .core.pointsync.pointsync import run_pointsync
 from .core.translate.translate import run_translation
 from .core.transcribe.transcribe import run_transcription
+from .core.container.container import run_container_tasks
 from . import __version__
 
 console = Console()
@@ -23,7 +24,7 @@ def main():
 
     try:
         console.clear()
-        console.print(f"[bold blue]🎬 Anchor Subtitle Sync {__version__}[/bold blue]\n")
+        console.print(f"[bold blue]⚓ Anchor Subtitle Sync {__version__}[/bold blue]\n")
 
         # Hardware Check
         device, compute_type, batch_size, model_size, translation_model = get_compute_device(force_model=args.audio_model, force_batch=args.batch_size, force_translation_model=args.translation_model)
@@ -64,6 +65,9 @@ def main():
                 run_translation(args, device, translation_model, console)
             elif (mode == "transcribe"):
                 run_transcription(args, device, model_size, compute_type, console)
+            elif (mode == "container"):
+                container_mode = select_container_mode()
+                run_container_tasks(args, container_mode, console)
 
     except KeyboardInterrupt:
         console.print("\n[bold red]✖  Aborted by user.[/bold red]")

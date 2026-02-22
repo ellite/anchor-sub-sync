@@ -22,6 +22,7 @@
 - 📍 **Point Sync**: Fix linear drift by matching distinct lines against a reference subtitle.
 - 🌐 **Translation**: Context-aware translation using NLLB, with dual-speaker preservation and auto-formatting.
 - 📝 **Transcriptions**: Generate subtitles directly from the video.
+- 📦 **Container Tasks**: Extract, Embed, or Strip subtitles from media
 
 ## How It Works - Under the Hood
 
