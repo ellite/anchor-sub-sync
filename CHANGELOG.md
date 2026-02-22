@@ -2,6 +2,13 @@
 
 
 
+## v1.7.0 (2026-02-22)
+
+### Feature
+
+* feat: burn in subtitles to video ([`d56033d`](https://github.com/ellite/anchor-sub-sync/commit/d56033d9128357f238102e2188436599d1b5866f))
+
+
 ## v1.6.0 (2026-02-22)
 
 ### Feature
