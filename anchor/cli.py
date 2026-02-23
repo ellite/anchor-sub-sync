@@ -13,6 +13,7 @@ from .core.pointsync.pointsync import run_pointsync
 from .core.translate.translate import run_translation
 from .core.transcribe.transcribe import run_transcription
 from .core.container.container import run_container_tasks
+from .core.clean.clean import run_clean_fix
 from .core.burn.burn import run_burn
 from . import __version__
 
@@ -71,6 +72,8 @@ def main():
                 run_container_tasks(args, container_mode, console)
             elif (mode == "burn"):
                 run_burn(args, device, console)
+            elif (mode == "clean_fix"):
+                run_clean_fix(args, console)
 
     except KeyboardInterrupt:
         console.print("\n[bold red]✖  Aborted by user.[/bold red]")

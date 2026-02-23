@@ -36,7 +36,7 @@ def find_best_video_match(sub_path):
             
     return None
 
-def open_subtitle(path: Path) -> pysubs2.SSAFile:
+def open_subtitle(path: Path, **kwargs) -> pysubs2.SSAFile:
     """
     Attempts to load a subtitle file using various common encodings.
     """
@@ -54,7 +54,7 @@ def open_subtitle(path: Path) -> pysubs2.SSAFile:
     
     for enc in encodings:
         try:
-            return pysubs2.load(path_str, encoding=enc)
+            return pysubs2.load(path_str, encoding=enc, **kwargs)
         except Exception as e:
             last_error = e
             continue

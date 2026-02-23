@@ -52,7 +52,6 @@ def select_run_mode():
         "(Extract, Embed, or Strip subtitles from media)"
     )
 
-    # Burn subtitle to vide
     menu.add_row(
         "6.",
         "🔥",
@@ -60,12 +59,19 @@ def select_run_mode():
         "(Permanently burn subtitles into video)"
     )
 
+    menu.add_row(
+        "7.",
+        "🧽",
+        "Clean & Fix",
+        "(Repair and clean subtitle files)"
+    )
+
     console.print(menu)
     console.print("")
 
     choice = Prompt.ask(
         "[bold]Select Mode[/bold]", 
-        choices=["1", "2", "3", "4", "5", "6"], 
+        choices=["1", "2", "3", "4", "5", "6", "7"], 
         default="1",
         show_choices=False,
         show_default=True
@@ -83,6 +89,8 @@ def select_run_mode():
         return "container"
     elif choice == "6":
         return "burn"
+    elif choice == "7":
+        return "clean_fix"
     
     return None
 
