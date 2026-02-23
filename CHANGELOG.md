@@ -2,6 +2,17 @@
 
 
 
+## v1.8.0 (2026-02-23)
+
+### Chore
+
+* chore: fix readme ([`a9440f8`](https://github.com/ellite/anchor-sub-sync/commit/a9440f824827ca578230f0e5bc27ff36c80397c1))
+
+### Feature
+
+* feat: clean and repair subtitles ([`0f41efc`](https://github.com/ellite/anchor-sub-sync/commit/0f41efca112b69f8a197c0b9fd12b523febb39f1))
+
+
 ## v1.7.0 (2026-02-22)
 
 ### Feature
