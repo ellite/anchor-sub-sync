@@ -2,6 +2,13 @@
 
 
 
+## v1.8.2 (2026-02-24)
+
+### Fix
+
+* fix: remove dependencies validation and just disable features missing dependencies ([`91398dd`](https://github.com/ellite/anchor-sub-sync/commit/91398ddc6ef92c790e3af939057e4ee836ef377d))
+
+
 ## v1.8.1 (2026-02-24)
 
 ### Fix
