@@ -2,97 +2,87 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
 from rich import box
+from .dependencies import get_system_dependencies
 
 console = Console()
 
 def select_run_mode():
     """
-    Displays the Main Menu inline with better styling.
+    Displays the Main Menu inline with dynamic dependency checking.
     """
-    
     console.print("\n[bold cyan]⚡ Select task[/bold cyan]")
+    
     menu = Table(box=False, show_header=False, padding=(0, 1))
-    menu.add_column("Opt", style="bold cyan", width=3, justify="right")
+    menu.add_column("Opt", width=3, justify="right")
     menu.add_column("Icon", width=2, justify="center")
-    menu.add_column("Name", style="bold white")
-    menu.add_column("Desc", style="dim white")
+    menu.add_column("Name")
+    menu.add_column("Desc")
+    menu.add_column("Warning", style="bold red")
 
-    menu.add_row(
-        "1.", 
-        "🔊", 
-        "Audio Sync", 
-        "(Automatic Sync via Whisper)"
-    )
+    sys_deps = get_system_dependencies()
 
-    menu.add_row(
-        "2.", 
-        "📍", 
-        "Point Sync", 
-        "(Sync via reference Subtitle)"
-    )
+    tasks = [
+        {"id": "1", "icon": "🔊", "name": "Audio Sync", "desc": "Automatic Sync via Whisper", "req": ["ffmpeg"]},
+        {"id": "2", "icon": "📍", "name": "Point Sync", "desc": "Sync via reference Subtitle", "req": []},
+        {"id": "3", "icon": "🌐", "name": "Translate", "desc": "Translate subtitle text to another language", "req": []},
+        {"id": "4", "icon": "📝", "name": "Transcribe", "desc": "Generate subtitles from video/audio", "req": ["ffmpeg"]},
+        {"id": "5", "icon": "📦", "name": "Container Tasks", "desc": "Extract, Embed, or Strip subtitles from media", "req": ["ffmpeg", "ffprobe"]},
+        {"id": "6", "icon": "🔥", "name": "Burn-in", "desc": "Permanently burn subtitles into video", "req": ["ffmpeg"]},
+        {"id": "7", "icon": "🧽", "name": "Clean & Fix", "desc": "Repair and clean subtitle files", "req": []},
+    ]
 
-    menu.add_row(
-        "3.",
-        "🌐",
-        "Translate",
-        "(Translate subtitle text to another language)"
-    )
+    valid_choices = []
+    default_choice = None
 
-    menu.add_row(
-        "4.",
-        "📝",
-        "Transcribe",
-        "(Generate subtitles from video/audio)"
-    )
-
-    menu.add_row(
-        "5.",
-        "📦",
-        "Container Tasks",
-        "(Extract, Embed, or Strip subtitles from media)"
-    )
-
-    menu.add_row(
-        "6.",
-        "🔥",
-        "Burn-in",
-        "(Permanently burn subtitles into video)"
-    )
-
-    menu.add_row(
-        "7.",
-        "🧽",
-        "Clean & Fix",
-        "(Repair and clean subtitle files)"
-    )
+    for t in tasks:
+        # Check which required tools are missing for this specific task
+        missing = [d for d in t["req"] if not sys_deps.get(d, False)]
+        
+        if not missing:
+            # All good! Add to valid choices and style normally
+            valid_choices.append(t["id"])
+            if default_choice is None:
+                default_choice = t["id"] # Set default to the first available option
+                
+            menu.add_row(
+                f"[bold cyan]{t['id']}.[/bold cyan]", 
+                t["icon"], 
+                f"[bold white]{t['name']}[/bold white]", 
+                f"[dim white]({t['desc']})[/dim white]"
+            )
+        else:
+            # Missing deps! Gray out and add warning
+            missing_str = ", ".join(missing)
+            menu.add_row(
+                f"[dim]{t['id']}.[/dim]", 
+                f"[dim]{t['icon']}[/dim]", 
+                f"[dim]{t['name']}[/dim]", 
+                f"[dim]({t['desc']})[/dim]",
+                f"[bold red]Missing: {missing_str}[/bold red]"
+            )
 
     console.print(menu)
     console.print("")
 
     choice = Prompt.ask(
         "[bold]Select Mode[/bold]", 
-        choices=["1", "2", "3", "4", "5", "6", "7"], 
-        default="1",
+        choices=valid_choices, 
+        default=default_choice,
         show_choices=False,
         show_default=True
     )
 
-    if choice == "1":
-        return "audio"
-    elif choice == "2":
-        return "point"
-    elif choice == "3":
-        return "translate"
-    elif choice == "4":
-        return "transcribe"
-    elif choice == "5":
-        return "container"
-    elif choice == "6":
-        return "burn"
-    elif choice == "7":
-        return "clean_fix"
+    mapping = {
+        "1": "audio",
+        "2": "point",
+        "3": "translate",
+        "4": "transcribe",
+        "5": "container",
+        "6": "burn",
+        "7": "clean_fix",
+    }
     
-    return None
+    return mapping.get(choice)
 
 
 def select_container_mode():

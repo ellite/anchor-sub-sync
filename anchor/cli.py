@@ -6,7 +6,6 @@ pytorch_compat.apply_patches()
 from rich.console import Console
 from .hardware import get_compute_device
 from .utils.args import parse_arguments
-from .utils.validations import check_dependencies
 from .utils.selections import select_container_mode, select_run_mode, select_pointsync_mode
 from .core.audiosync.audiosync import run_audiosync
 from .core.pointsync.pointsync import run_pointsync
@@ -31,10 +30,6 @@ def main():
         # Hardware Check
         device, compute_type, batch_size, model_size, translation_model = get_compute_device(force_model=args.audio_model, force_batch=args.batch_size, force_translation_model=args.translation_model)
         console.print(f"[dim]Engine configured for: [bold white]{device}[/bold white] (model: {model_size}, precision: {compute_type}, batch size: {batch_size}, translation model: {translation_model})[/dim]\n")
-
-        # Dependency Check
-        if not check_dependencies():
-            sys.exit(1)
 
         # Check if it should run in unattended mode
         # If -s / --subtitle is porvided, it will run in unattended mode.
