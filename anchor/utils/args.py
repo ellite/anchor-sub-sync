@@ -1,4 +1,5 @@
 import argparse
+from anchor import __version__
 
 def parse_arguments():
     """
@@ -7,6 +8,13 @@ def parse_arguments():
         Namespace: The parsed arguments.
     """
     parser = argparse.ArgumentParser(description="Anchor Subtitle Sync")
+
+    parser.add_argument(
+        "-V", "--version", 
+        action="version", 
+        version=f"%(prog)s {__version__}",
+        help="Show program's version number and exit."
+    )
     
     # Model Configuration
     parser.add_argument(

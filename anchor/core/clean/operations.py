@@ -11,7 +11,7 @@ def remove_sdh(sub):
     # --- MUSIC PATTERN SETUP ---
     music_symbols = ['♪', '♫', '♩', '♬', '♭', '♮', '♯', '𝄞', '𝄢', '#']
     music_class = f"[{''.join(music_symbols)}]"
-    music_pair_pattern = re.compile(f"{music_class}.*?{music_class}")
+    music_pair_pattern = re.compile(f"(?s){music_class}.*?{music_class}")
     music_trailing_pattern = re.compile(f"{music_class}.*?(?= - |$)")
 
     # --- PRE-SCAN: Protect ALL-CAPS subtitle files ---
@@ -34,7 +34,13 @@ def remove_sdh(sub):
         # Auto-detect the newline style (pysubs2 uses \N, others use \n)
         nl = r'\N' if r'\N' in original_text else '\n'
         
+        # Strip brackets
         cleaned_text = re.sub(bracket_pattern, '', original_text)
+        
+        # WIPE PAIRED MUSIC TAGS ACROSS MULTIPLE LINES
+        cleaned_text = re.sub(music_pair_pattern, '', cleaned_text)
+        
+        # Now split the remaining text into lines
         lines = re.split(r'\\N|\n', cleaned_text)
         cleaned_lines = []
         
@@ -44,10 +50,7 @@ def remove_sdh(sub):
             # Strip speaker label but keep leading tags
             line = re.sub(speaker_pattern, r'\1', line).strip()
 
-            # Wipe out paired symbols and their lyrics
-            line = re.sub(music_pair_pattern, '', line)
-            
-            # Wipe out unclosed symbols and trailing lyrics
+            # WIPE OUT UNCLOSED SYMBOLS AND TRAILING LYRICS (LINE BY LINE)
             line = re.sub(music_trailing_pattern, '', line).strip()
             
             # Check the "bare" text

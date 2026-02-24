@@ -24,7 +24,7 @@
 - 📝 **Transcriptions**: Generate subtitles directly from the video.
 - 📦 **Container Tasks**: Extract, Embed, or Strip subtitles from media
 - 🔥 **Burn-in**: Permanently burn subtitles into video
-- ✂️ **Clean & Fix**:  Repair and clean subtitle files
+- 🧽 **Clean & Fix**:  Repair and clean subtitle files
 
 ## How It Works - Under the Hood
 
