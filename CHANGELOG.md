@@ -2,6 +2,13 @@
 
 
 
+## v1.8.1 (2026-02-24)
+
+### Fix
+
+* fix: bug on cleaning music on remove sdh ([`a7beed4`](https://github.com/ellite/anchor-sub-sync/commit/a7beed4841760d3dd1b5991c1ebea8757576ee53))
+
+
 ## v1.8.0 (2026-02-23)
 
 ### Chore
