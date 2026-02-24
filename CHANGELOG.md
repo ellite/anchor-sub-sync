@@ -2,6 +2,13 @@
 
 
 
+## v1.8.3 (2026-02-24)
+
+### Fix
+
+* fix: ffmpeg faulty dependency check ([`39287f8`](https://github.com/ellite/anchor-sub-sync/commit/39287f83d201fbb93263bc7f0693c3df82eae516))
+
+
 ## v1.8.2 (2026-02-24)
 
 ### Fix

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anchor-sub-sync"
-version = "1.8.2"
+version = "1.8.3"
 description = "GPU-accelerated AI Subtitle Sync"
 readme = "README.md"
 requires-python = ">=3.9"
