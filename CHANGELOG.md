@@ -2,6 +2,14 @@
 
 
 
+## v1.9.0 (2026-02-25)
+
+### Feature
+
+* feat: subtitle conversion
+fix: image subtitle extraction ([`9ed52f8`](https://github.com/ellite/anchor-sub-sync/commit/9ed52f825019a0bb62a083440ebaf693499c807f))
+
+
 ## v1.8.3 (2026-02-24)
 
 ### Fix
