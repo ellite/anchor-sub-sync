@@ -8,5 +8,6 @@ def get_system_dependencies() -> dict:
     return {
         "ffmpeg": shutil.which("ffmpeg") is not None,
         "ffprobe": shutil.which("ffprobe") is not None,
+        "mkvextract": shutil.which("mkvextract") is not None,
         "tesseract": shutil.which("tesseract") is not None,
     }

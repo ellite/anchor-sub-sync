@@ -104,4 +104,4 @@ def run_clean_fix(args, console):
         
         console.print(f" 💾 Saved to: [u]{output_path.name}[/u]")
 
-    console.print("\n[bold green]✨ Clean & Fix Complete![/bold green]")
+    console.print("\n[bold green]🧽 Clean & Fix Complete![/bold green]")

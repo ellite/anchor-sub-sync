@@ -1,5 +1,6 @@
 import subprocess
 from pathlib import Path
+import shutil
 from ...utils.files import select_files_interactive, get_files, _run_curses_picker
 from ...utils.languages import get_subtitle_language
 from ...utils.container import get_subtitle_streams
@@ -18,7 +19,7 @@ def run_container_tasks(args, container_mode, console):
     
 
 def run_extract(args, console):
-    console.print("[bold cyan]🧲 Running Extract Task[/bold cyan]\n")
+    console.print("\n[bold cyan]🧲 Running Extract Task[/bold cyan]\n")
 
     # Select Media Files using picker
     cwd = Path.cwd()
@@ -92,9 +93,16 @@ def run_extract(args, console):
                 extract_codec = "srt"
             else:
                 extract_codec = "copy"
-                if codec == "hdmv_pgs_subtitle": ext = ".sup"
-                elif codec in ["dvd_subtitle", "dvdsub"]: ext = ".sub"
-                else: ext = f".{codec}"
+                if codec == "hdmv_pgs_subtitle": 
+                    ext = ".sup"
+                elif codec in ["dvd_subtitle", "dvdsub"]: 
+                    # Use mkvextract for VobSub if installed AND the source is an MKV
+                    if shutil.which("mkvextract") and media_path.suffix.lower() == ".mkv":
+                        ext = ".idx"
+                    else:
+                        ext = ".mkv" # Bulletproof fallback wrapper
+                else: 
+                    ext = ".mkv"
 
             base_name = media_path.stem
             
@@ -107,18 +115,32 @@ def run_extract(args, console):
                 modifier = f".track_{idx}"
 
             temp_file = Path(f"temp_extract_{idx}{ext}")
-            cmd = [
-                "ffmpeg", "-y", "-v", "error", 
-                "-i", str(media_path), 
-                "-map", f"0:{idx}", 
-                "-c:s", extract_codec, 
-                str(temp_file)
-            ]
             
+            # --- EXECUTE EXTRACTION ---
             console.print(f" 🔧  Extracting Track {idx}...")
-            subprocess.run(cmd, check=True)
+            
+            try:
+                if ext == ".idx":
+                    cmd = [
+                        "mkvextract", 
+                        str(media_path), 
+                        "tracks", 
+                        f"{idx}:{temp_file}"
+                    ]
+                else:
+                    cmd = [
+                        "ffmpeg", "-y", "-v", "error", 
+                        "-i", str(media_path), 
+                        "-map", f"0:{idx}", 
+                        "-c:s", extract_codec, 
+                        str(temp_file)
+                    ]
+                subprocess.run(cmd, check=True)
+            except subprocess.CalledProcessError as e:
+                console.print(f" [bold red]❌ Extraction failed for track {idx}[/bold red]")
+                continue
 
-            # AI Language Detection
+            # --- AI Language Detection ---
             if is_text and lang.lower() == "und":
                 console.print(f" 🤖 [dim]Analyzing language for Track {idx}...[/dim]")
                 detected_lang = get_subtitle_language(temp_file)
@@ -127,7 +149,7 @@ def run_extract(args, console):
 
             lang = normalize_language_code(lang)
 
-            # Final Naming & Conflict Resolution
+            # --- Final Naming & Conflict Resolution ---
             final_name = f"{base_name}.{lang}{modifier}{ext}"
             final_path = cwd / final_name
             
@@ -138,13 +160,20 @@ def run_extract(args, console):
                 counter += 1
 
             temp_file.rename(final_path)
-            
             console.print(f" 💾 Saved to: [u]{final_name}[/u]")
+            
+            # Catch mkvextract's invisible .sub sidekick!
+            if ext == ".idx":
+                companion_temp = temp_file.with_suffix(".sub")
+                if companion_temp.exists():
+                    companion_final = final_path.with_suffix(".sub")
+                    companion_temp.rename(companion_final)
+                    console.print(f" 💾 Saved companion file: [u]{companion_final.name}[/u]")
 
     console.print("\n[bold green]✨ Extraction Complete![/bold green]")
 
 def run_embed(args, console):
-    console.print("[bold cyan]🧩 Running Embed Task[/bold cyan]\n")
+    console.print("\n[bold cyan]🧩 Running Embed Task[/bold cyan]\n")
 
     cwd = Path.cwd()
 
@@ -246,7 +275,7 @@ def run_embed(args, console):
             temp_output.unlink() # Cleanup failed temp file
 
 def run_strip(args, console):
-    console.print("[bold cyan]🧹 Running Strip Task[/bold cyan]\n")
+    console.print("\n[bold cyan]🧹 Running Strip Task[/bold cyan]\n")
 
     cwd = Path.cwd()
 

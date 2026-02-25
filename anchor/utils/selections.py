@@ -29,6 +29,7 @@ def select_run_mode():
         {"id": "5", "icon": "📦", "name": "Container Tasks", "desc": "Extract, Embed, or Strip subtitles from media", "req": ["ffmpeg", "ffprobe"]},
         {"id": "6", "icon": "🔥", "name": "Burn-in", "desc": "Permanently burn subtitles into video", "req": ["ffmpeg"]},
         {"id": "7", "icon": "🧽", "name": "Clean & Fix", "desc": "Repair and clean subtitle files", "req": []},
+        {"id": "8", "icon": "🔄", "name": "Convert", "desc": "Convert between subtitle formats", "req": []},
     ]
 
     valid_choices = []
@@ -48,7 +49,8 @@ def select_run_mode():
                 f"[bold cyan]{t['id']}.[/bold cyan]", 
                 t["icon"], 
                 f"[bold white]{t['name']}[/bold white]", 
-                f"[dim white]({t['desc']})[/dim white]"
+                f"[dim white]({t['desc']})[/dim white]",
+                ""
             )
         else:
             # Missing deps! Gray out and add warning
@@ -80,6 +82,7 @@ def select_run_mode():
         "5": "container",
         "6": "burn",
         "7": "clean_fix",
+        "8": "convert",
     }
     
     return mapping.get(choice)
@@ -87,97 +90,189 @@ def select_run_mode():
 
 def select_container_mode():
     console.print("\n[bold cyan]📦 Select Container Task[/bold cyan]")
+    
     menu = Table(box=False, show_header=False, padding=(0, 1))
-    menu.add_column("Opt", style="bold cyan", width=3, justify="right")
+    menu.add_column("Opt", width=3, justify="right")
     menu.add_column("Icon", width=2, justify="center")
-    menu.add_column("Name", style="bold white")
-    menu.add_column("Desc", style="dim white")
+    menu.add_column("Name")
+    menu.add_column("Desc")
+    menu.add_column("Warning", style="bold red")
 
-    menu.add_row(
-        "1.", 
-        "🧲", 
-        "Extract", 
-        "(Extract embedded subtitles from media)"
-    )
+    sys_deps = get_system_dependencies()
 
-    menu.add_row(
-        "2.", 
-        "🧩", 
-        "Embed", 
-        "(Embed external subtitles into media)"
-    )
+    tasks = [
+        {"id": "1", "icon": "🧲", "name": "Extract", "desc": "(Extract embedded subtitles from media)", "req": ["ffmpeg", "ffprobe"]},
+        {"id": "2", "icon": "🧩", "name": "Embed", "desc": "(Embed external subtitles into media)", "req": ["ffmpeg", "ffprobe"]},
+        {"id": "3", "icon": "🧹", "name": "Strip", "desc": "(Remove embedded subtitles from media)", "req": ["ffmpeg", "ffprobe"]},
+    ]
 
-    menu.add_row(
-        "3.",
-        "🧹",
-        "Strip",
-        "(Remove embedded subtitles from media)"
-    )
+    valid_choices = []
+    default_choice = None
+
+    for t in tasks:
+        missing = [d for d in t["req"] if not sys_deps.get(d, False)]
+        
+        if not missing:
+            valid_choices.append(t["id"])
+            if default_choice is None:
+                default_choice = t["id"]
+                
+            # Pass an empty string for the Warning column
+            menu.add_row(
+                f"[bold cyan]{t['id']}.[/bold cyan]", 
+                t["icon"], 
+                f"[bold white]{t['name']}[/bold white]", 
+                f"[dim white]{t['desc']}[/dim white]",
+                "" 
+            )
+        else:
+            missing_str = ", ".join(missing)
+            menu.add_row(
+                f"[dim]{t['id']}.[/dim]", 
+                f"[dim]{t['icon']}[/dim]", 
+                f"[dim]{t['name']}[/dim]", 
+                f"[dim]{t['desc']}[/dim]",
+                f"Missing: {missing_str}"
+            )
 
     console.print(menu)
     console.print("")
 
     choice = Prompt.ask(
         "[bold]Select Task[/bold]", 
-        choices=["1", "2", "3"], 
-        default="1",
+        choices=valid_choices, 
+        default=default_choice,
         show_choices=False,
         show_default=True
     )
 
-    if choice == "1":
-        return "extract"
-    elif choice == "2":
-        return "embed"
-    elif choice == "3":
-        return "strip"
+    mapping = {
+        "1": "extract",
+        "2": "embed",
+        "3": "strip",
+    }
     
-    return None
+    return mapping.get(choice)
+
 
 def select_pointsync_mode():
-    r"""
+    """
     Displays the option for Point Sync mode (Auto vs Manual)
     """
-    
     console.print("\n[bold cyan]⚡ Point Sync Method[/bold cyan]")
     
-    # Same layout as main menu for consistency
-    menu = Table(box=None, show_header=False, padding=(0, 1), pad_edge=False)
-    menu.add_column("Icon", style="bold cyan", width=3, justify="right")
-    menu.add_column("Opt", width=2, justify="center")
-    menu.add_column("Name", style="bold white")
-    menu.add_column("Desc", style="dim white")
+    menu = Table(box=False, show_header=False, padding=(0, 1))
+    menu.add_column("Opt", width=3, justify="right")
+    menu.add_column("Icon", width=2, justify="center")
+    menu.add_column("Name")
+    menu.add_column("Desc")
+    menu.add_column("Warning", style="bold red")
 
-    # Option 1: Automatic Linear
-    menu.add_row(
-        "1.", 
-        "🤖", 
-        "Auto-Linear", 
-        "(Finds start/end matches in reference file)"
-    )
+    sys_deps = get_system_dependencies()
 
-    # Option 2: Manual
-    menu.add_row(
-        "2.", 
-        "✋", 
-        "Manual-Pick", 
-        "(You select matching lines visually)"
-    )
+    tasks = [
+        {"id": "1", "icon": "🤖", "name": "Auto-Linear", "desc": "(Finds start/end matches in reference file)", "req": []},
+        {"id": "2", "icon": "✋", "name": "Manual-Pick", "desc": "(You select matching lines visually)", "req": []},
+    ]
+
+    valid_choices = []
+    default_choice = None
+
+    for t in tasks:
+        missing = [d for d in t["req"] if not sys_deps.get(d, False)]
+        
+        if not missing:
+            valid_choices.append(t["id"])
+            if default_choice is None:
+                default_choice = t["id"]
+                
+            menu.add_row(
+                f"[bold cyan]{t['id']}.[/bold cyan]", 
+                t["icon"], 
+                f"[bold white]{t['name']}[/bold white]", 
+                f"[dim white]{t['desc']}[/dim white]",
+                ""
+            )
+        else:
+            missing_str = ", ".join(missing)
+            menu.add_row(
+                f"[dim]{t['id']}.[/dim]", 
+                f"[dim]{t['icon']}[/dim]", 
+                f"[dim]{t['name']}[/dim]", 
+                f"[dim]{t['desc']}[/dim]",
+                f"Missing: {missing_str}"
+            )
 
     console.print(menu)
-    console.print("") # Spacer
+    console.print("")
 
     choice = Prompt.ask(
         "[bold]Select Method[/bold]", 
-        choices=["1", "2"], 
-        default="1",
+        choices=valid_choices, 
+        default=default_choice,
         show_choices=False,
         show_default=True
     )
 
-    if choice == "1":
-        return "auto"
-    elif choice == "2":
-        return "manual"
+    mapping = {
+        "1": "auto",
+        "2": "manual",
+    }
     
-    return None
+    return mapping.get(choice)
+
+
+def select_target_format():
+    """
+    Displays the Target Format menu for Subtitle Conversion.
+    """
+    console.print("\n[bold cyan]🎯 Select Target Format[/bold cyan]")
+    
+    menu = Table(box=False, show_header=False, padding=(0, 1))
+    menu.add_column("Opt", width=3, justify="right")
+    menu.add_column("Icon", width=2, justify="center")
+    menu.add_column("Name")
+    menu.add_column("Desc")
+    menu.add_column("Warning", style="bold red")
+
+    sys_deps = get_system_dependencies()
+
+    tasks = [
+        {"id": "1", "icon": "📝", "name": "SRT", "desc": "(SubRip - Broadest compatibility)", "req": []},
+        {"id": "2", "icon": "🌐", "name": "VTT", "desc": "(WebVTT - Standard for web players)", "req": []},
+        {"id": "3", "icon": "🎨", "name": "ASS", "desc": "(Advanced SubStation Alpha - Rich styling)", "req": []},
+    ]
+
+    valid_choices = []
+    default_choice = None
+
+    for t in tasks:
+        missing = [d for d in t["req"] if not sys_deps.get(d, False)]
+        if not missing:
+            valid_choices.append(t["id"])
+            if default_choice is None:
+                default_choice = t["id"]
+            menu.add_row(
+                f"[bold cyan]{t['id']}.[/bold cyan]", t["icon"], 
+                f"[bold white]{t['name']}[/bold white]", f"[dim white]{t['desc']}[/dim white]", ""
+            )
+        else:
+            missing_str = ", ".join(missing)
+            menu.add_row(
+                f"[dim]{t['id']}.[/dim]", f"[dim]{t['icon']}[/dim]", 
+                f"[dim]{t['name']}[/dim]", f"[dim]{t['desc']}[/dim]", f"Missing: {missing_str}"
+            )
+
+    console.print(menu)
+    console.print("")
+
+    choice = Prompt.ask(
+        "[bold]Select Format[/bold]", 
+        choices=valid_choices, 
+        default=default_choice,
+        show_choices=False,
+        show_default=True
+    )
+
+    mapping = {"1": ".srt", "2": ".vtt", "3": ".ass"}
+    return mapping.get(choice)

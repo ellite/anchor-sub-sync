@@ -14,6 +14,7 @@ from .core.transcribe.transcribe import run_transcription
 from .core.container.container import run_container_tasks
 from .core.clean.clean import run_clean_fix
 from .core.burn.burn import run_burn
+from .core.convert.convert import run_convert
 from . import __version__
 
 console = Console()
@@ -69,6 +70,8 @@ def main():
                 run_burn(args, device, console)
             elif (mode == "clean_fix"):
                 run_clean_fix(args, console)
+            elif mode == "convert":
+                run_convert(args, device, console)
 
     except KeyboardInterrupt:
         console.print("\n[bold red]✖  Aborted by user.[/bold red]")
