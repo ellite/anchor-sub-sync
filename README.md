@@ -25,6 +25,7 @@
 - 📦 **Container Tasks**: Extract, Embed, or Strip subtitles from media
 - 🔥 **Burn-in**: Permanently burn subtitles into video
 - 🧽 **Clean & Fix**:  Repair and clean subtitle files
+- 🔄 **Convert**: Convert between subtitle formats
 
 ## How It Works - Under the Hood
 
