@@ -40,7 +40,7 @@ def parse_arguments():
     parser.add_argument(
         "-o", "--overwrite",
         action="store_true",
-        help="Overwrite synced files without adding .synced suffix",
+        help="Overwrite synced files without adding .synced suffix.",
         default=False
     )
 
@@ -48,7 +48,7 @@ def parse_arguments():
     parser.add_argument(
         "-r", "--reference",
         type=str,
-        help="For unattended sync, provide reference subtitle file path for point sync",
+        help="For unattended sync, provide reference subtitle file path for point sync.",
         default=None
     )
     parser.add_argument(
@@ -60,14 +60,20 @@ def parse_arguments():
     parser.add_argument(
         "-v", "--video",
         type=str,
-        help="For unattended sync, provide path to the video file if the script fails to auto-match",
+        help="For unattended sync, provide path to the video file if the script fails to auto-match.",
         default=None
     )
     parser.add_argument(
         "-l", "--language",
         type=str,
-        help="For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation",
+        help="For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation or download.",
         default=None
+    )
+    parser.add_argument(
+        "-d", "--download",
+        action="store_true",
+        help="For unattended mode, automatically download subtitles. Provide -v with the video file path, or anchor downloads for all videos in the directory.",
+        default=False
     )
     
     return parser.parse_args()

@@ -26,6 +26,7 @@
 - 🔥 **Burn-in**: Permanently burn subtitles into video
 - 🧽 **Clean & Fix**:  Repair and clean subtitle files
 - 🔄 **Convert**: Convert between subtitle formats
+- 📥 **Download**: Automatically find and download matching subtitles
 
 ## How It Works - Under the Hood
 
@@ -161,6 +162,33 @@ And ensure you have enough disk space for model downloads.
 | **Base.en** | N/A | 4.1 min | ~11x | 579 | 9.7 / 10 | Decent, but not significantly better than Tiny to justify the extra time. |
 | **Tiny.en** | N/A | 3.7 min | ~12x | 572 | 9.5 / 10 | Incredibly fast. Good overall sync, but slightly less precise start times (ms delay). |
 
+## 📥 Subtitle Download
+
+Automatically or manually download subtitles for a specific file or all files in the directory.
+
+Available Providers:
+- SubDL (If credentials set on the config file)
+- OpenSubtitles (If credentials set on the config file)
+- Addic7ed 
+- Podnapisi (Disabled by default. It slows down every subtitles search significantly without providing extra value. Can be enabled on the config file)
+
+### 🎯 Smart Scoring System
+
+When searching for subtitles, Anchor doesn't just blindly download the first result. It uses a weighted scoring engine to analyze your local video filename against the API results, bubbling the perfect match to the top of the list and burying incompatible files.
+
+Here is a simplified breakdown of how the scoring works:
+
+| Match Criteria | Score Impact | Description |
+| :--- | :---: | :--- |
+| **Hash Match** | `+ High` | The Holy Grail. The video file hash matches the subtitle hash exactly, guaranteeing perfect sync. |
+| **Source** | `+ Medium` | Matches the source type (e.g., `WEB`, `BluRay`). |
+| **Release Group** | `+ Medium` | Matches the specific ripper/group. |
+| **Cut** | `+ Medium` | Matches the specific cut (e.g., `Theatrical`, `Extended`). |
+| **Network** | `+ Medium` | Matches the specific network. |
+| **SDH/Forced Preference** | `+/-` | Awards or deducts points based on your `prefer_sdh` and `prefer_forced` configuration setting. |
+| **Wrong Episode** | `-100` | **Instant Rejection.** If the season or episode numbers do not match perfectly, it is heavily penalized to prevent downloading the wrong file. |
+
+
 ## 🚀 Requirements
 
 * **OS:** Linux | Windows | MacOS
@@ -277,7 +305,8 @@ You can override the automatic hardware detection or control specific settings u
 | --video | -v | For unattended sync, provide path to the video file if the script fails to auto-match |
 | --overwrite | -o | Will overwrite the synced subtitle instead of saving it as file.synced.srt |
 | --help | -h  | Show the help message and exit. |
-| --language | -l | For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation |
+| --language | -l | For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation or download |
+| --download | -d | For unattended mode, automatically download subtitles. Provide -v with the video file path, or anchor downloads subtitles for all videos in the directory. |
 
 Examples
 --------
@@ -315,6 +344,24 @@ Run unattended translation:
 
 ```bash
 anchor -s A.3.Minutes.Example.Video.en.srt -l pt 
+```
+
+Run unattended download for all files:
+
+```bash
+anchor -d
+```
+
+Run unattended download for a specific file:
+
+```bash
+anchor -d -v A.3.Minutes.Example.Video.mkv
+```
+
+Run unattended download for all files for specific languages:
+
+```bash
+anchor -d -l en,fr
 ```
 
 ## ⚙️ Development

@@ -9,3 +9,4 @@ whisperx
 langdetect
 transformers
 huggingface_hub
+requests

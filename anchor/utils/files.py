@@ -62,6 +62,23 @@ def open_subtitle(path: Path, **kwargs) -> pysubs2.SSAFile:
     console.print(f"[bold red]❌ Failed to open {path.name}. Last error: {last_error}[/bold red]")
     raise ValueError(f"Could not open {path.name}")
 
+def select_languages_interactive(langs, header_lines=None):
+    """
+    Multi-select picker for languages.
+    Returns a list of selected language strings.
+    """
+    if len(langs) <= 1:
+        return langs
+        
+    indices = _run_curses_picker(
+        options=langs, 
+        title="Select Languages to Search", 
+        multi_select=True, 
+        header_lines=header_lines
+    )
+    
+    return [langs[i] for i in indices]
+
 #  TUI FILE PICKER (Curses)
 def select_files_interactive(files, header_lines=None, multi_select=True):
     """
@@ -72,7 +89,7 @@ def select_files_interactive(files, header_lines=None, multi_select=True):
         return []
     
     options = [f.name for f in files]
-    indices = _run_curses_picker(options, title="Select Subtitles", multi_select=multi_select, header_lines=header_lines)
+    indices = _run_curses_picker(options, title="Select", multi_select=multi_select, header_lines=header_lines)
     return [files[i] for i in indices]
 
 def select_video_fallback(sub_filename, header_lines=None):
@@ -110,17 +127,30 @@ def _picker_loop(stdscr, options, title, multi_select, header_lines):
     curses.start_color()
     curses.use_default_colors() # Use terminal transparency if available
 
-    # PALETTE
-    # Pair 1: Selected Item (Cyan text)
+    # PALETTE (Original)
     curses.init_pair(1, curses.COLOR_CYAN, -1)
-    # Pair 2: Main Title (Green)
     curses.init_pair(2, curses.COLOR_GREEN, -1)
-    # Pair 3: Highlight Bar (Black Text on Cyan BG)
     curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_CYAN)
-    # Pair 4: Header Info (Magenta)
     curses.init_pair(4, curses.COLOR_MAGENTA, -1)
-    # Pair 5: Dim/Instruction Text (White)
     curses.init_pair(5, curses.COLOR_WHITE, -1)
+    
+    # PALETTE (New Syntax Highlighting Colors)
+    curses.init_pair(10, curses.COLOR_GREEN, -1)
+    curses.init_pair(11, curses.COLOR_RED, -1)
+    curses.init_pair(12, curses.COLOR_YELLOW, -1)
+    curses.init_pair(13, curses.COLOR_BLUE, -1)
+    curses.init_pair(14, curses.COLOR_WHITE, -1)
+    curses.init_pair(15, curses.COLOR_MAGENTA, -1)
+
+    # Map the Rich tags to our new Curses pairs
+    COLORS = {
+        '[green]': curses.color_pair(10) | curses.A_BOLD,
+        '[red]': curses.color_pair(11) | curses.A_BOLD,
+        '[yellow]': curses.color_pair(12) | curses.A_BOLD,
+        '[blue]': curses.color_pair(13) | curses.A_BOLD,
+        '[white]': curses.color_pair(14) | curses.A_NORMAL,
+        '[magenta]': curses.color_pair(15) | curses.A_BOLD,
+    }
 
     current_row = 0
     selected_indices = set()
@@ -132,37 +162,31 @@ def _picker_loop(stdscr, options, title, multi_select, header_lines):
         
         start_y = 0
 
-        # DRAW APP HEADER (If passed)
+        # DRAW APP HEADER
         if header_lines:
             for line in header_lines:
                 safe_line = line[:width-1]
-                # First line bold/magenta, others dim
                 style = curses.color_pair(4) | curses.A_BOLD if start_y == 0 else curses.color_pair(5) | curses.A_DIM
                 stdscr.addstr(start_y, 0, safe_line, style)
                 start_y += 1
-            start_y += 1 # Spacer after App Header
+            start_y += 1 
 
         # DRAW MENU TITLE & INSTRUCTIONS
-        # Title
-        stdscr.addstr(start_y, 0, f"📂 {title}", curses.color_pair(2) | curses.A_BOLD)
+        stdscr.addstr(start_y, 0, f"📋 {title}", curses.color_pair(2) | curses.A_BOLD)
         start_y += 1
         
-        # Instructions (Dimmed)
         if multi_select:
-            instr = "   [↑/↓] Navigate   [Space] Toggle Select   [TAB] Select All/None   [Enter] Confirm"
+            instr = "   [↑/↓] Navigate   [Space] Toggle Select   [TAB] Select All/None   [Enter] Confirm   [Q/Esc] Skip"
         else:
-            instr = "   [↑/↓] Navigate   [Space] Select   [Enter] Confirm"
+            instr = "   [↑/↓] Navigate   [Space] Select   [Enter] Confirm   [Q/Esc] Skip"
         stdscr.addstr(start_y, 0, instr, curses.color_pair(5) | curses.A_DIM)
         start_y += 1
-        
-        # Spacer (The gap you requested)
         start_y += 1 
 
         # DRAW FILE LIST
         list_height = height - start_y - 1
         if list_height < 1: list_height = 1
 
-        # Scroll Logic
         if current_row < offset:
             offset = current_row
         elif current_row >= offset + list_height:
@@ -174,7 +198,6 @@ def _picker_loop(stdscr, options, title, multi_select, header_lines):
                 break
             
             y_pos = start_y + i
-            
             is_hovered = (idx == current_row)
             is_checked = (idx in selected_indices)
             
@@ -183,29 +206,52 @@ def _picker_loop(stdscr, options, title, multi_select, header_lines):
             if not multi_select:
                 checkbox = "(*)" if is_checked else "( )"
                 if not multi_select and is_hovered: 
-                    checkbox = "(*)" # Visual feedback for single select
+                    checkbox = "(*)"
 
-            row_text = f" {checkbox} {options[idx]}"
+            row_raw = f" {checkbox} {options[idx]}"
             
-            # Truncate
-            if len(row_text) > width - 1:
-                row_text = row_text[:width-4] + "..."
+            # Strip tags to calculate the "true" string length
+            row_clean = re.sub(r'\[/?(?:green|red|yellow|blue|white|magenta)\]', '', row_raw)
 
             # DRAWING STYLES
             if is_hovered:
-                # Highlight Bar: Black text on Cyan Background
+                # Highlight Bar: Strip colors so the cyan block stays readable
+                trunc_clean = row_clean[:width-4] + "..." if len(row_clean) > width - 1 else row_clean
+                
                 stdscr.attron(curses.color_pair(3))
-                stdscr.addstr(y_pos, 0, row_text)
-                stdscr.addstr(y_pos, len(row_text), " " * (width - len(row_text) - 1)) # Fill line
+                stdscr.addstr(y_pos, 0, trunc_clean)
+                stdscr.addstr(y_pos, len(trunc_clean), " " * (width - len(trunc_clean) - 1))
                 stdscr.attroff(curses.color_pair(3))
             else:
-                # Normal Rows
-                if is_checked:
-                    # Selected but not hovered: Bold Cyan
-                    stdscr.addstr(y_pos, 0, row_text, curses.color_pair(1) | curses.A_BOLD)
-                else:
-                    # Unselected: DIM WHITE (Solves the "too white" issue)
-                    stdscr.addstr(y_pos, 0, row_text, curses.color_pair(5) | curses.A_DIM)
+                # Normal Rows: Parse the string chunk by chunk and paint the colors
+                parts = re.split(r'(\[/?(?:green|red|yellow|blue|white|magenta)\])', row_raw)
+                base_style = curses.color_pair(1) | curses.A_BOLD if is_checked else curses.color_pair(5) | curses.A_DIM
+                current_style = base_style
+                
+                current_x = 0
+                for part in parts:
+                    if not part: continue
+                    
+                    if part in COLORS:
+                        current_style = COLORS[part]
+                    elif part.startswith('[/'):
+                        current_style = base_style
+                    else:
+                        # Print the actual text chunk safely
+                        space_left = width - current_x - 1
+                        if space_left <= 0:
+                            break
+                        
+                        chunk = part
+                        if len(chunk) > space_left:
+                            chunk = chunk[:space_left-3] + "..." if space_left > 3 else chunk[:space_left]
+                            
+                        try:
+                            stdscr.addstr(y_pos, current_x, chunk, current_style)
+                        except curses.error:
+                            pass
+                        
+                        current_x += len(chunk)
 
         stdscr.refresh()
 
@@ -213,9 +259,11 @@ def _picker_loop(stdscr, options, title, multi_select, header_lines):
         key = stdscr.getch()
 
         if key == curses.KEY_UP:
-            current_row = max(0, current_row - 1)
+            # Wraps to the bottom if going up from the top
+            current_row = (current_row - 1) % len(options)
         elif key == curses.KEY_DOWN:
-            current_row = min(len(options) - 1, current_row + 1)
+            # Wraps to the top if going down from the bottom
+            current_row = (current_row + 1) % len(options)
         elif key == ord(' '):
             if multi_select:
                 if current_row in selected_indices:
@@ -223,18 +271,16 @@ def _picker_loop(stdscr, options, title, multi_select, header_lines):
                 else:
                     selected_indices.add(current_row)
             else:
-                return [current_row] # Single select confirms immediately
-        elif multi_select and key == 9: # TAB for Select All/None
+                return [current_row] 
+        elif multi_select and key == 9: 
             if len(selected_indices) == len(options):
                 selected_indices.clear()
             else:
                 selected_indices = set(range(len(options)))     
-        elif key == 10: # Enter
+        elif key == 10: 
             if selected_indices:
-                # Return explicitly checked items
                 return sorted(list(selected_indices))
             else:
-                # If nothing checked, return the hovered item as a fallback
                 return [current_row]
-        elif key == 27 or key == ord('q'): # Esc/Q
+        elif key == 27 or key == ord('q'): 
             return []

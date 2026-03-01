@@ -30,6 +30,7 @@ def select_run_mode():
         {"id": "6", "icon": "🔥", "name": "Burn-in", "desc": "Permanently burn subtitles into video", "req": ["ffmpeg"]},
         {"id": "7", "icon": "🧽", "name": "Clean & Fix", "desc": "Repair and clean subtitle files", "req": []},
         {"id": "8", "icon": "🔄", "name": "Convert", "desc": "Convert between subtitle formats", "req": []},
+        {"id": "9", "icon": "📥", "name": "Download", "desc": "Automatically find and download matching subtitles", "req": []},
     ]
 
     valid_choices = []
@@ -83,6 +84,7 @@ def select_run_mode():
         "6": "burn",
         "7": "clean_fix",
         "8": "convert",
+        "9": "download",
     }
     
     return mapping.get(choice)
@@ -275,4 +277,71 @@ def select_target_format():
     )
 
     mapping = {"1": ".srt", "2": ".vtt", "3": ".ass"}
+    return mapping.get(choice)
+
+
+def get_subtitle_mode(console):
+    """
+    Displays the option for Subtitle Download mode (Auto vs Manual)
+    """
+    console.print("\n[bold cyan]📥 Subtitle Download Mode[/bold cyan]")
+    
+    menu = Table(box=False, show_header=False, padding=(0, 1))
+    menu.add_column("Opt", width=3, justify="right")
+    menu.add_column("Icon", width=2, justify="center")
+    menu.add_column("Name")
+    menu.add_column("Desc")
+    menu.add_column("Warning", style="bold red")
+
+    sys_deps = get_system_dependencies()
+
+    tasks = [
+        {"id": "1", "icon": "🤖", "name": "Auto-Match", "desc": "(Automatically find and download the highest scoring subtitles)", "req": []},
+        {"id": "2", "icon": "✋", "name": "Manual-Pick", "desc": "(View a list of top results and select them visually)", "req": []},
+    ]
+
+    valid_choices = []
+    default_choice = None
+
+    for t in tasks:
+        missing = [d for d in t["req"] if not sys_deps.get(d, False)]
+        
+        if not missing:
+            valid_choices.append(t["id"])
+            if default_choice is None:
+                default_choice = t["id"]
+                
+            menu.add_row(
+                f"[bold cyan]{t['id']}.[/bold cyan]", 
+                t["icon"], 
+                f"[bold white]{t['name']}[/bold white]", 
+                f"[dim white]{t['desc']}[/dim white]",
+                ""
+            )
+        else:
+            missing_str = ", ".join(missing)
+            menu.add_row(
+                f"[dim]{t['id']}.[/dim]", 
+                f"[dim]{t['icon']}[/dim]", 
+                f"[dim]{t['name']}[/dim]", 
+                f"[dim]{t['desc']}[/dim]",
+                f"Missing: {missing_str}"
+            )
+
+    console.print(menu)
+    console.print("")
+
+    choice = Prompt.ask(
+        "[bold]Select Mode[/bold]", 
+        choices=valid_choices, 
+        default=default_choice,
+        show_choices=False,
+        show_default=True
+    )
+
+    mapping = {
+        "1": "auto",
+        "2": "manual",
+    }
+    
     return mapping.get(choice)

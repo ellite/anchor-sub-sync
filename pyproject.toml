@@ -19,6 +19,7 @@ dependencies = [
     "langdetect",
     "transformers",
     "huggingface_hub",
+    "requests",
 ]
 
 [project.scripts]
