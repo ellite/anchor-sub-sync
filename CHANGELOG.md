@@ -2,6 +2,18 @@
 
 
 
+## v1.10.0 (2026-03-01)
+
+### Chore
+
+* chore: update readme ([`67d7817`](https://github.com/ellite/anchor-sub-sync/commit/67d78173ea402833b99d6b16753b4ce90b14e5f1))
+
+### Feature
+
+* feat: automatic / manual subtitle download
+feat: permanent overrides via config file ([`1095006`](https://github.com/ellite/anchor-sub-sync/commit/109500606ade8ee4b4b84fb005c52db54e401b72))
+
+
 ## v1.9.0 (2026-02-25)
 
 ### Feature
