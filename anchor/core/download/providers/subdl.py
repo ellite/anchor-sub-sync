@@ -2,6 +2,9 @@ import re
 import requests
 import zipfile
 import io
+import subprocess
+import tempfile
+import shutil
 import unicodedata
 from pathlib import Path
 from anchor import __version__
@@ -211,9 +214,8 @@ def search_subdl(parsed_data: dict, language: str, api_key: str) -> list:
 
 def download_subdl(url_path: str, target_video_path: Path, custom_suffix: str = ".srt", episode: str = None) -> bool:
     """
-    Downloads a subtitle ZIP from SubDL, extracts the first .srt inside,
+    Downloads a subtitle ZIP/RAR from SubDL, extracts the right .srt inside,
     and saves it next to the video with the given custom_suffix.
-    url_path is the value stored in sub["id"], e.g. "/subtitle/3197651-3213944.zip"
     """
     headers = {
         "User-Agent": USER_AGENT,
@@ -227,29 +229,81 @@ def download_subdl(url_path: str, target_video_path: Path, custom_suffix: str = 
         if response.status_code != 200:
             return False
 
-        with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
-            srt_names = [
-                name for name in zf.namelist()
-                if name.lower().endswith((".srt", ".sub"))
-            ]
-            if not srt_names:
-                return False
-
-            # --- EPISODE PICKER ---
-            chosen = _pick_episode_from_pack(srt_names, episode)
-            srt_content = zf.read(chosen)
-
         final_path = target_video_path.with_suffix(custom_suffix)
-        with open(final_path, "wb") as f:
-            f.write(srt_content)
 
-        return True
+        try:
+            # ATTEMPT 1: Try to open it as a standard ZIP archive
+            with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
+                srt_names = [
+                    name for name in zf.namelist()
+                    if name.lower().endswith((".srt", ".sub", ".ass", ".vtt"))
+                ]
+                if not srt_names:
+                    return False
+
+                chosen = _pick_episode_from_pack(srt_names, episode)
+                srt_content = zf.read(chosen)
+
+            with open(final_path, "wb") as f:
+                f.write(srt_content)
+            return True
+
+        except zipfile.BadZipFile:
+            # ATTEMPT 2: FALLBACK (It's not a ZIP archive)
+            
+            # Check for the dreaded RAR format using its magic bytes
+            if response.content.startswith(b'Rar!'):
+                # 1. Check if unrar is actually installed on the system
+                if not shutil.which("unrar"):
+                    print("   [yellow]⚠️ SubDL served a .RAR archive, but 'unrar' is missing from your system. Skipping...[/yellow]")
+                    return False
+                    
+                # 2. Extract using a temporary directory
+                try:
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        temp_rar_path = Path(temp_dir) / "temp.rar"
+                        
+                        # Save the raw RAR bytes to disk
+                        with open(temp_rar_path, "wb") as tr:
+                            tr.write(response.content)
+                            
+                        # Call system unrar: 'unrar e -y temp.rar temp_dir/'
+                        subprocess.run(
+                            ["unrar", "e", "-y", str(temp_rar_path), str(temp_dir)],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            check=True
+                        )
+                        
+                        # Find the extracted subtitles
+                        extracted_files = list(Path(temp_dir).glob("*"))
+                        srt_files = [f for f in extracted_files if f.suffix.lower() in [".srt", ".sub", ".ass", ".vtt"]]
+                        
+                        if not srt_files:
+                            return False
+                            
+                        # Re-use your episode picker logic
+                        srt_names = [f.name for f in srt_files]
+                        chosen_name = _pick_episode_from_pack(srt_names, episode)
+                        chosen_path = next(f for f in srt_files if f.name == chosen_name)
+                        
+                        # Copy the chosen file to the final destination
+                        shutil.copy(chosen_path, final_path)
+                        return True
+                        
+                except subprocess.CalledProcessError as e:
+                    print(f"   [red]❌ unrar failed to extract the archive: {e}[/red]")
+                    return False
+            
+            # ATTEMPT 3: It's just a raw text stream (.srt, .ass, etc.)
+            with open(final_path, "wb") as f:
+                f.write(response.content)
+            return True
 
     except Exception as e:
         print(f"   [red]❌ SubDL Download Exception: {e}[/red]")
 
     return False
-
 
 def _pick_episode_from_pack(srt_names: list, episode: str) -> str:
     """

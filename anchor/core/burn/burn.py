@@ -26,7 +26,7 @@ def run_burn(args, device, console):
         console.print("[bold red]❌ No subtitle files found in this folder.[/bold red]")
         return
 
-    selected = select_files_interactive(subs, header_lines=["[dim]Select subtitle file(s) to burn into video:[/dim]"])
+    selected = select_files_interactive(subs, header_lines=["Select subtitle file(s) to burn into video:"], multi_select=True)
     if not selected:
         console.print("[yellow]No files selected. Aborting burn.[/yellow]")
         return

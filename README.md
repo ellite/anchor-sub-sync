@@ -19,6 +19,7 @@
 ⚡ Core Capabilities
 
 - 🔊 **Audio Sync**: Auto-align subtitles to video using Whisper (no reference text needed).
+- 📑 **Reference Sync**: Automatic Sync using a perfectly timed reference subtitle
 - 📍 **Point Sync**: Fix linear drift by matching distinct lines against a reference subtitle.
 - 🌐 **Translation**: Context-aware translation using NLLB, with dual-speaker preservation and auto-formatting.
 - 📝 **Transcriptions**: Generate subtitles directly from the video.
@@ -301,7 +302,7 @@ You can override the automatic hardware detection or control specific settings u
 | --batch-size | -b | Manually set the batch size (e.g., 8, 16). Useful for optimizing VRAM usage. |
 | --translation-model | -t | Force a specific translation model (overrides automatic selection). |
 | --subtitle | -s | Runs unattended sync on a single subtitle file (provide path to .srt, .ass, etc.) |
-| --reference | -r | For unattended sync, provide reference subtitle file path for point sync |
+| --reference | -r | For unattended sync, provide reference subtitle file path for reference sync |
 | --video | -v | For unattended sync, provide path to the video file if the script fails to auto-match |
 | --overwrite | -o | Will overwrite the synced subtitle instead of saving it as file.synced.srt |
 | --help | -h  | Show the help message and exit. |
@@ -335,7 +336,7 @@ Run unattended sync:
 anchor -s A.3.Minutes.Example.Video.en.srt -v A.3.Minutes.Example.Video.mkv 
 ```
 
-Run unattended point sync:
+Run unattended reference sync:
 
 ```bash
 anchor -s A.3.Minutes.Example.Video.en.srt -r A.3.Minutes.Example.Video.pt.srt 

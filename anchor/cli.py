@@ -13,6 +13,7 @@ from .core.pointsync.pointsync import run_pointsync
 from .core.translate.translate import run_translation
 from .core.transcribe.transcribe import run_transcription
 from .core.container.container import run_container_tasks
+from .core.referencesync.referencesync import run_referencesync
 from .core.clean.clean import run_clean_fix
 from .core.burn.burn import run_burn
 from .core.convert.convert import run_convert
@@ -47,9 +48,9 @@ def main():
             # If -v / --video is provided together with -s, it's a audio sync
             if args.video:
                 run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console)
-            # If -r / --reference is provided together with -s, it's a point sync    
+            # If -r / --reference is provided together with -s, it's a reference sync    
             elif args.reference:
-                run_pointsync(args, "auto", device, translation_model, console)
+                run_referencesync(args, device, translation_model, console)
             # if -l / --language is provided together with -s, it's a translation 
             elif args.language:
                 run_translation(args, device, translation_model, console)
@@ -67,6 +68,8 @@ def main():
             mode = select_run_mode()
             if (mode == "audio"):
                 run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console)
+            elif (mode == "reference"):
+                run_referencesync(args, device, translation_model, console)
             elif (mode == "point"):
                 point_mode = select_pointsync_mode()
                 run_pointsync(args, point_mode, device, translation_model, console)
