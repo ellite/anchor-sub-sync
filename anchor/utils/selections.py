@@ -225,7 +225,6 @@ def select_pointsync_mode():
     
     return mapping.get(choice)
 
-
 def select_target_format():
     """
     Displays the Target Format menu for Subtitle Conversion.
