@@ -2,6 +2,13 @@
 
 
 
+## v1.11.0 (2026-03-01)
+
+### Feature
+
+* feat: automatic sync using a reference subtitle ([`1ec17b9`](https://github.com/ellite/anchor-sub-sync/commit/1ec17b99b2298c2f62121395d803d9122890dd72))
+
+
 ## v1.10.1 (2026-03-01)
 
 ### Fix

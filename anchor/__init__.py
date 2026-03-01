@@ -6,7 +6,7 @@ import sys
 # (PTY replacement) don't cause handler writes to a closed file descriptor.
 logging.basicConfig(stream=sys.__stderr__)
 
-__version__ = "1.10.1"
+__version__ = "1.11.0"
 
 # ================= NOISE SUPPRESSION =================
 warnings.filterwarnings("ignore", message=".*TensorFloat-32.*")
