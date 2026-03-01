@@ -2,6 +2,14 @@
 
 
 
+## v1.10.1 (2026-03-01)
+
+### Fix
+
+* fix: rar extraction after subdl download
+feat: automatic sync using a reference subtitle ([`9bfd606`](https://github.com/ellite/anchor-sub-sync/commit/9bfd606a356ddfaa851865cc6a11a2918c7e4e9a))
+
+
 ## v1.10.0 (2026-03-01)
 
 ### Chore
