@@ -2,6 +2,13 @@
 
 
 
+## v1.11.1 (2026-03-02)
+
+### Fix
+
+* fix: language mapping on the subtitle providers ([`d3729c2`](https://github.com/ellite/anchor-sub-sync/commit/d3729c275e1688c1e113c87a55799d4928b2f236))
+
+
 ## v1.11.0 (2026-03-01)
 
 ### Feature
