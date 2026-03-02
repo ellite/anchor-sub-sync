@@ -13,6 +13,22 @@ SUBDL_SEARCH_URL = "https://api.subdl.com/api/v1/subtitles"
 SUBDL_DOWNLOAD_BASE = "https://dl.subdl.com"
 USER_AGENT = "Anchor-Sub-Sync " + __version__
 
+def map_subdl_language(lang_code: str) -> str:
+    """
+    Converts standard ISO codes to SubDL's specific uppercase format.
+    """
+    l = lang_code.strip().lower()
+    
+    # Brazilian Portuguese mapping
+    if l in ["pt-br", "br", "pob"]:
+        return "BR_PT"
+    
+    # European Portuguese mapping
+    if l in ["pt", "pt-pt"]:
+        return "PT"
+        
+    return l.upper()
+
 def _normalize_title(title: str) -> str:
     t = re.sub(r'[\._]', ' ', title.lower())
     return re.sub(r'[^\w\s]', '', t).strip()
@@ -130,21 +146,21 @@ def _normalize_results(raw_subs: list) -> list:
 
 def search_subdl(parsed_data: dict, language: str, api_key: str) -> list:
     """
-    Searches SubDL using text metadata.
-    `language` should be a single language code (e.g. "en" or "PT").
-    Handles SubDL's disambiguation flow automatically:
-        - First request searches by film_name
-        - If SubDL returns shows but no subtitles, picks the best sd_id and retries (single language)
-    Returns a normalized list of subtitle dicts matching the OpenSubtitles shape.
+    Searches SubDL using text metadata for a single language.
     """
     headers = {
         "User-Agent": USER_AGENT,
         "Accept": "application/json",
     }
 
-    langs_upper = ",".join(l.strip().upper() for l in language.split(",") if l.strip())
-    params = _build_params(parsed_data, langs_upper, api_key)
+    # 1. Map the single requested language to SubDL's format
+    requested_lang_lower = language.strip().lower()
+    lang_upper = map_subdl_language(requested_lang_lower)
+    
+    params = _build_params(parsed_data, lang_upper, api_key)
     params["film_name"] = parsed_data.get("title", "")
+
+    all_raw_subs = []
 
     try:
         response = requests.get(
@@ -154,55 +170,54 @@ def search_subdl(parsed_data: dict, language: str, api_key: str) -> list:
             timeout=10,
         )
 
-        if response.status_code != 200:
-            return []
+        if response.status_code == 200:
+            data = response.json()
 
-        data = response.json()
+            if data.get("status"):
+                raw_subs = data.get("subtitles", [])
 
-        if not data.get("status"):
-            return []
+                # Handle SubDL disambiguation (if they return shows but no direct subs)
+                if not raw_subs and data.get("results"):
+                    best_match = _pick_best_show(data["results"], parsed_data)
 
-        raw_subs = data.get("subtitles", [])
+                    if best_match:
+                        retry_params = params.copy()
+                        retry_params.pop("film_name", None)
+                        retry_params.pop("languages", None) # Remove the plural key
+                        retry_params["sd_id"] = best_match["sd_id"]
+                        
+                        # The disambiguation sd_id endpoint strictly requires singular 'language'
+                        retry_params["language"] = lang_upper
 
-        if not raw_subs and data.get("results"):
-            best_match = _pick_best_show(data["results"], parsed_data)
+                        try:
+                            response2 = requests.get(
+                                SUBDL_SEARCH_URL,
+                                headers=headers,
+                                params=retry_params,
+                                timeout=10,
+                            )
 
-            if best_match:
-                params.pop("film_name", None)
-                params.pop("languages", None)
-                params["sd_id"] = best_match["sd_id"]
+                            if response2.status_code == 200:
+                                data2 = response2.json()
+                                if data2.get("status"):
+                                    raw_subs += data2.get("subtitles", [])
+                        except Exception as e:
+                            print(f"   [red]❌ SubDL retry [{lang_upper}] Exception: {e}[/red]")
 
-                # Loop per-language since sd_id endpoint only accepts one at a time
-                for lang in langs_upper.split(","):
-                    params["language"] = lang.strip()  # Note: singular "language" key
-
-                    try:
-                        response2 = requests.get(
-                            SUBDL_SEARCH_URL,
-                            headers=headers,
-                            params=params,
-                            timeout=10,
-                        )
-
-                        if response2.status_code == 200:
-                            data2 = response2.json()
-                            if data2.get("status"):
-                                raw_subs += data2.get("subtitles", [])
-                    except Exception as e:
-                        print(f"   [red]❌ SubDL retry [{lang}] Exception: {e}[/red]")
+                all_raw_subs.extend(raw_subs)
 
     except Exception as e:
-        print(f"   [red]❌ SubDL Search Exception: {e}[/red]")
+        print(f"   [red]❌ SubDL Search Exception [{lang_upper}]: {e}[/red]")
         return []
     
-    normalized = _normalize_results(raw_subs)
-    requested_langs = [l.strip().lower() for l in language.split(',')]
+    # 2. Normalize results and filter
+    normalized = _normalize_results(all_raw_subs)
     filtered_results = []
     
     for sub in normalized:
-        sub_lang = sub["language"].lower()
-        
-        if sub_lang in requested_langs:
+        # _normalize_lang_code safely converted SubDL's "BR_PT" back to "pt-br"
+        # so we can compare it directly against the original requested language!
+        if sub["language"] == requested_lang_lower:
             sub["filename"] = sanitize_filename(sub.get("filename", ""))
             if "releases" in sub:
                 sub["releases"] = [sanitize_filename(r) for r in sub["releases"]]

@@ -34,8 +34,9 @@ def parse_video_filename(file_path: Path | str) -> dict:
         parsed["title"] = re.sub(r'[\._\-]', ' ', title_raw).strip()
 
     else:
-        # --- Season-only pack (S01 with no episode) ---
-        season_match = re.search(r'(?i)\bS(?P<season>\d{1,2})\b', filename)
+        # --- Season-only pack (S01, Season 1, Season.01 with no episode) ---
+        # Expanded to catch "Season 9", "Season.09", "Season_9", etc.
+        season_match = re.search(r'(?i)\b(?:S|Season[\s\._\-]*)(?P<season>\d{1,2})\b', filename)
         if season_match:
             parsed["season"] = season_match.group('season').lstrip('0') or '0'
             # Season pack
@@ -57,9 +58,19 @@ def parse_video_filename(file_path: Path | str) -> dict:
         parsed["source"] = source_match.group(1).upper()
         
     # --- 3. NETWORK ---
-    network_match = re.search(r'(?i)\b(AMZN|NF|HMAX|MAX|DSNP|ATVP|HULU|PCOK|PEACOCK|APPLE|ATV|VIU|VIKI)\b', filename)
+    network_match = re.search(r'(?i)\b(AMZN|NF|HMAX|MAX|DSNP|ATVP|HULU|PCOK|PEACOCK|APPLE|ATV|VIU|VIKI|ITV)\b', filename)
     if network_match:
-        parsed["network"] = network_match.group(1).upper()
+        raw_network = network_match.group(1).upper()
+        
+        # Normalize equivalent networks so the scorer sees them as identical
+        if raw_network in ["HMAX", "MAX"]:
+            parsed["network"] = "MAX"
+        elif raw_network in ["ATVP", "APPLE", "ATV"]:
+            parsed["network"] = "APPLE"
+        elif raw_network in ["PCOK", "PEACOCK"]:
+            parsed["network"] = "PEACOCK"
+        else:
+            parsed["network"] = raw_network
         
     # --- 4. RESOLUTION ---
     res_match = re.search(r'(?i)(2160p|1080p|720p|480p|4K)', filename)

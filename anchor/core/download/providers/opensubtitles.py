@@ -2,9 +2,25 @@ import requests
 from pathlib import Path
 from anchor import __version__
 
-
 OS_BASE_URL = "https://api.opensubtitles.com/api/v1"
 USER_AGENT = "Anchor-Sub-Sync " + __version__
+
+def map_os_language(lang_code: str) -> str:
+    """
+    Maps standard ISO codes to OpenSubtitles specific regional codes.
+    The REST API strictly requires 'pt-pt' or 'pt-br', and ignores 'pt'.
+    """
+    l = lang_code.strip().lower()
+    
+    # European Portuguese
+    if l in ["pt", "pt-pt"]:
+        return "pt-pt"
+    
+    # Brazilian Portuguese
+    if l in ["br", "pob", "pt-br"]:
+        return "pt-br"
+        
+    return l
 
 def get_os_token(api_key: str, username: str, password: str) -> str:
     """Authenticates with OpenSubtitles to get a Bearer token for downloads."""
@@ -32,12 +48,16 @@ def search_opensubtitles(parsed_data: dict, file_hash: str, language: str, api_k
         "Accept": "application/json"
     }
     
+    # Map the requested language to what OpenSubtitles expects
+    requested_lang = language.strip().lower()
+    mapped_lang = map_os_language(requested_lang)
+    
     results = []
     hash_match_found = False
     
     # --- ATTEMPT 1: EXACT VIDEO HASH ---
     if file_hash:
-        params_hash = {"languages": language, "moviehash": file_hash}
+        params_hash = {"languages": mapped_lang, "moviehash": file_hash}
         try:
             response = requests.get(f"{OS_BASE_URL}/subtitles", headers=headers, params=params_hash, timeout=10)
             if response.status_code == 200:
@@ -50,7 +70,7 @@ def search_opensubtitles(parsed_data: dict, file_hash: str, language: str, api_k
     # --- ATTEMPT 2: TEXT FALLBACK ---
     if not results:
         params_text = {
-            "languages": language,
+            "languages": mapped_lang,
             "query": parsed_data.get("title", "")
         }
         if parsed_data.get("year"): params_text["year"] = parsed_data.get("year")
@@ -85,10 +105,11 @@ def search_opensubtitles(parsed_data: dict, file_hash: str, language: str, api_k
             "provider": "OpenSubs",
             "id": file_id,
             "filename": filename,
-            "language": attrs.get("language", "en"),
+            "language": requested_lang,
             "releases": releases,
             "download_url": "",
             "hash_match": hash_match_found,
+            "_is_hi": attrs.get("hearing_impaired", False),
             "score": 0 
         })
         

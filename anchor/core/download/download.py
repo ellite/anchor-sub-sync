@@ -78,7 +78,10 @@ def run_download(args, config: dict, console: Console):
             available_videos = [target_path]
     elif target_path.is_dir():
         # If they pointed at a folder (or passed nothing), scan the whole directory
-        available_videos = [f for f in target_path.iterdir() if f.is_file() and f.suffix.lower() in video_extensions]
+        available_videos = sorted(
+            [f for f in target_path.iterdir() if f.is_file() and f.suffix.lower() in video_extensions],
+            key=lambda x: x.name.lower()
+        )
 
     if not available_videos:
         console.print(f"[yellow]⚠️ No video files found for target: {target_path.name}[/yellow]")
@@ -168,7 +171,9 @@ def run_download(args, config: dict, console: Console):
                 if use_podnapisi:
                     results += search_podnapisi(parsed_data, file_hash, lang)
                 if use_addic7ed:
-                    results += search_addic7ed(parsed_data, file_hash, lang)    
+                    results += search_addic7ed(parsed_data, file_hash, lang)  
+                # Pause 1 second to avoid hitting limits
+                time.sleep(1)
 
             
         if not results:

@@ -6,7 +6,26 @@ from anchor import __version__
 GESTDOWN_BASE_URL = "https://api.gestdown.info"
 USER_AGENT = "Anchor-Sub-Sync " + __version__
 
+def map_addic7ed_language(lang_code: str) -> str:
+    """
+    Maps standard ISO codes to the exact dialects Addic7ed/Gestdown expects.
+    """
+    l = lang_code.strip().lower()
+    
+    # European Portuguese
+    if l in ["pt", "pt-pt"]:
+        return "pt"
+    
+    # Brazilian Portuguese
+    if l in ["br", "pob", "pt-br"]:
+        return "pt-br"
+        
+    return l
+
 def search_addic7ed(parsed_data: dict, file_hash: str, language: str) -> list:
+    """
+    Searches Addic7ed via Gestdown for a single language.
+    """
     title = parsed_data.get("title")
     season = parsed_data.get("season")
     episode = parsed_data.get("episode")
@@ -23,64 +42,99 @@ def search_addic7ed(parsed_data: dict, file_hash: str, language: str) -> list:
         return []
 
     clean_title = title.replace(".", " ").strip().lower()
-    safe_title = urllib.parse.quote(clean_title)
     
-    langs = [l.strip() for l in language.split(",") if l.strip()]
+    # Map the single requested language to Addic7ed's dialect
+    requested_lang = language.strip().lower()
+    mapped_lang = map_addic7ed_language(requested_lang)
+    
     all_results = []
     headers = {
         "User-Agent": USER_AGENT,
         "Accept": "application/json"
     }
 
-    for lang in langs:
-        url = f"{GESTDOWN_BASE_URL}/subtitles/find/{lang}/{safe_title}/{s_num}/{e_num}"
+    # ==========================================
+    # STEP 1: Get the exact show UUID
+    # ==========================================
+    safe_title = urllib.parse.quote(clean_title)
+    search_url = f"{GESTDOWN_BASE_URL}/shows/search/{safe_title}"
+    
+    show_id = None
+    try:
+        search_resp = requests.get(search_url, headers=headers, timeout=10)
+        if search_resp.status_code == 200:
+            shows = search_resp.json().get("shows", [])
+            # Filter for an exact name match to avoid spin-offs (e.g., "Beyond Stranger Things")
+            for show in shows:
+                if show.get("name", "").lower() == clean_title:
+                    show_id = show.get("id")
+                    break
+    except Exception as e:
+        print(f"   [red]❌ Addic7ed Search Exception: {e}[/red]")
+        return []
 
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
+    # If the show doesn't exist in Addic7ed, bail out early
+    if not show_id:
+        return []
 
-            if response.status_code == 200:
-                data = response.json()
-                hits = data.get("matchingSubtitles", [])
+    # ==========================================
+    # STEP 2: Fetch subtitles by UUID
+    # ==========================================
+    url = f"{GESTDOWN_BASE_URL}/subtitles/get/{show_id}/{s_num}/{e_num}/{mapped_lang}"
 
-                for sub in hits:
-                    sub_id = sub.get("subtitleId")
-                    if not sub_id:
-                        continue
-                        
-                    release_tag = sub.get("version", "Unknown")
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Gestdown's /get/ endpoint can return a raw list or a wrapped dictionary
+            hits = []
+            if isinstance(data, list):
+                hits = data
+            elif isinstance(data, dict):
+                hits = data.get("matchingSubtitles", data.get("subtitles", []))
+
+            for sub in hits:
+                # Fallback chain for the ID just in case Gestdown changes their key again
+                sub_id = sub.get("subtitleId", sub.get("id"))
+                if not sub_id:
+                    continue
                     
-                    # Create a nice, clean filename based on the parser data
-                    display_title = clean_title.title().replace(" ", ".")
-                    filename = f"{display_title}.S{s_num:02d}E{e_num:02d}.{release_tag}.srt"
-                    
-                    # Grab everything to feed the scoring engine
-                    releases = [release_tag]
-                    if sub.get("release"):
-                        releases.append(sub.get("release"))
-                    releases.extend(sub.get("qualities", []))
-
-                    all_results.append({
-                        "provider": "Addic7ed",
-                        "id": sub_id,
-                        "filename": filename,
-                        "language": lang,
-                        "releases": releases,
-                        "download_url": f"{GESTDOWN_BASE_URL}{sub.get('downloadUri')}",
-                        "hash_match": False,
-                        "_is_hi": sub.get("hearingImpaired", False),
-                        "score": 0,
-                    })
-                    
-            elif response.status_code == 429:
-                print(f"   [yellow]⚠️ Addic7ed Rate Limit Hit (429) for {lang}. Skipping...[/yellow]")
-            elif response.status_code == 404:
-                # API returns 404 if no subtitles are found for that exact show/season combo
-                pass 
-            else:
-                print(f"   [red]❌ Addic7ed API Error {response.status_code} for {lang}[/red]")
+                release_tag = sub.get("version", "Unknown")
                 
-        except Exception as e:
-            print(f"   [red]❌ Addic7ed Search Exception: {e}[/red]")
+                # Create a nice, clean filename based on the parser data
+                display_title = clean_title.title().replace(" ", ".")
+                filename = f"{display_title}.S{s_num:02d}E{e_num:02d}.{release_tag}.srt"
+                
+                # Grab everything to feed the scoring engine
+                releases = [release_tag]
+                if sub.get("release"):
+                    releases.append(sub.get("release"))
+                releases.extend(sub.get("qualities", []))
+
+                all_results.append({
+                    "provider": "Addic7ed",
+                    "id": sub_id,
+                    "filename": filename,
+                    "language": requested_lang, # Pass the ORIGINAL language back to the engine!
+                    "releases": releases,
+                    "download_url": f"{GESTDOWN_BASE_URL}/subtitles/download/{sub_id}",
+                    "hash_match": False,
+                    "_is_hi": sub.get("hearingImpaired", False),
+                    "score": 0,
+                })
+                
+        elif response.status_code == 429:
+            print(f"   [yellow]⚠️ Addic7ed Rate Limit Hit (429) for {mapped_lang}. Skipping...[/yellow]")
+        elif response.status_code == 404:
+            # 404 just means no subtitles exist for this specific language/episode
+            pass 
+        else:
+            print(f"   [red]❌ Addic7ed API Error {response.status_code} for {mapped_lang}[/red]")
+            
+    except Exception as e:
+        print(f"   [red]❌ Addic7ed Fetch Exception: {e}[/red]")
 
     return all_results
 
