@@ -2,6 +2,14 @@
 
 
 
+## v1.12.0 (2026-03-15)
+
+### Feature
+
+* feat: add track name to container operations
+feat: identify and fix common hallucinations on translations ([`5568a13`](https://github.com/ellite/anchor-sub-sync/commit/5568a13de5bb9c5484c3933a38fad2cf1fe745b2))
+
+
 ## v1.11.1 (2026-03-02)
 
 ### Fix
