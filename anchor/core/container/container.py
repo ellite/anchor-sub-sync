@@ -57,15 +57,25 @@ def run_extract(args, console):
         for s in streams:
             idx = s.get("index")
             codec = s.get("codec_name", "unknown")
-            lang = s.get("tags", {}).get("language", "und")
+            
+            # Extract the tags dictionary once
+            tags = s.get("tags", {})
+            lang = tags.get("language", "und")
+            title = tags.get("title", "").strip()
+            
             disp = s.get("disposition", {})
             
             flags = []
             if disp.get("forced") == 1: flags.append("Forced")
             if disp.get("hearing_impaired") == 1: flags.append("SDH")
+            if disp.get("default") == 1: flags.append("Default") 
+            
             flag_str = f" [{','.join(flags)}]" if flags else ""
             
-            options.append(f"Track {idx}: {lang.upper()} ({codec}){flag_str}")
+            # Only append the title string if the metadata actually exists
+            title_str = f" - \"{title}\"" if title else ""
+            
+            options.append(f"Track {idx}: {lang.upper()} ({codec}){flag_str}{title_str}")
 
         # Pick the streams for this specific file
         selected_indices = _run_curses_picker(
