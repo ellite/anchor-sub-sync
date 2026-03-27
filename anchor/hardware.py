@@ -129,11 +129,58 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
     # Check for NVIDIA CUDA
     if torch.cuda.is_available():
         if torch.version.hip:
-            console.print("[bold red]🛑 Hardware Detected:[/bold red] AMD GPU (ROCm)")
-            device = "cuda"
-            compute_type = "float16" 
-            model_size = "medium"
-            translation_model = select_translation_model(8, is_gpu=True)
+            device_count = torch.cuda.device_count()
+            min_mem_gb = 0
+
+            try:
+                mems = []
+                for i in range(device_count):
+                    name = torch.cuda.get_device_name(i)
+                    props = torch.cuda.get_device_properties(i)
+                    gb = props.total_memory / (1024 ** 3)
+                    mems.append(gb)
+                    console.print(f"[bold red]🛑 Hardware Detected:[/bold red] {name} (ROCm, {math.ceil(gb)} GB)")
+
+                if mems:
+                    min_mem_gb = min(mems)
+            except Exception:
+                console.print("[bold red]🛑 Hardware Detected:[/bold red] AMD GPU (ROCm, Unknown VRAM, assuming 8 GB)")
+                min_mem_gb = 8
+
+            # Probe whether this ctranslate2 build actually supports ROCm
+            rocm_ct2_supported = False
+            try:
+                import ctranslate2
+                if "cuda" in ctranslate2.get_supported_compute_types("cuda"):
+                    test = ctranslate2.StorageView([1], [0.0], device="cuda")
+                    del test
+                    rocm_ct2_supported = True
+            except Exception:
+                pass
+
+            if rocm_ct2_supported:
+                console.print("[green]✅ ROCm-compatible CTranslate2 detected. GPU acceleration enabled.[/green]")
+                device = "cuda"
+                compute_type = "float16"
+                model_size = select_model_size(min_mem_gb, is_gpu=True)
+                translation_model = select_translation_model(min_mem_gb, is_gpu=True)
+
+                if min_mem_gb >= 24:
+                    batch_size = 16
+                elif min_mem_gb >= 12:
+                    batch_size = 8
+                else:
+                    batch_size = 4
+            else:
+                console.print("[yellow]⚠️ CTranslate2 has no ROCm support in this install. Falling back to CPU.[/yellow]")
+                console.print("[dim]   To enable AMD GPU acceleration, see: https://rocm.blogs.amd.com/artificial-intelligence/ctranslate2/README.html[/dim]")
+                device = "cpu"
+                compute_type = "int8"
+                batch_size = 4
+                # USE SYSTEM RAM FOR CPU SELECTION INSTEAD OF GPU VRAM
+                ram_gb = get_system_ram_gb() 
+                model_size = select_model_size(ram_gb, is_gpu=False)
+                translation_model = select_translation_model(ram_gb, is_gpu=False)
         else:
             device_count = torch.cuda.device_count()
             min_mem_gb = 0
