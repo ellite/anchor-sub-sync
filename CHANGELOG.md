@@ -2,6 +2,13 @@
 
 
 
+## v1.13.0 (2026-03-27)
+
+### Feature
+
+* feat: add api mode compatible with subtitle edit auto translate ([`81e87eb`](https://github.com/ellite/anchor-sub-sync/commit/81e87eb6691062249d6335f4921ab42322042482))
+
+
 ## v1.12.0 (2026-03-15)
 
 ### Feature
