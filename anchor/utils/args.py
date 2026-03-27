@@ -76,4 +76,11 @@ def parse_arguments():
         default=False
     )
     
+    # API Mode
+    parser.add_argument("--api",
+        action="store_true",
+        help="Enable API mode.",
+        default=False
+    )
+    
     return parser.parse_args()

@@ -20,6 +20,9 @@ dependencies = [
     "transformers",
     "huggingface_hub",
     "requests",
+    "fastapi",
+    "uvicorn",
+    "pydantic"
 ]
 
 [project.scripts]

@@ -28,6 +28,158 @@
 - 🧽 **Clean & Fix**:  Repair and clean subtitle files
 - 🔄 **Convert**: Convert between subtitle formats
 - 📥 **Download**: Automatically find and download matching subtitles
+- 🔌 **API Mode**: Expose Anchor's translation engine as a local API server, compatible with Subtitle Edit's Auto-Translate feature.
+
+## 🚀 Requirements
+
+* **OS:** Linux | Windows | MacOS
+* **GPU:** GPU Recommended, CPU only is possible (but slower)
+* **Python:** 3.10 or 3.11
+* **ffmpeg / ffprobe:** required for audio probing, metadata language detection, and audio extraction
+
+## 📦 Installation
+
+### 1. Install Anchor
+Install the tool directly from the repository.
+
+```bash
+pip install anchor-sub-sync
+```
+
+**⚠️ Important:** Because this tool relies on hardware acceleration, standard `pip install` often pulls the wrong drivers (CPU versions). If it does not work out of the box, please follow these steps in order.
+
+### 2. Install PyTorch (choose per hardware)
+
+Before installing PyTorch, run a few quick checks to detect your hardware:
+
+```bash
+# NVIDIA / CUDA
+nvidia-smi || true
+python3 -c "import torch; print('cuda', torch.cuda.is_available(), getattr(torch.cuda, 'get_device_name', lambda i: '')(0))"
+
+# Apple Silicon (MPS)
+python3 -c "import torch; print('mps', torch.backends.mps.is_available())"
+```
+
+Then install the appropriate build:
+
+- NVIDIA GPU with CUDA drivers installed:
+
+```bash
+pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu121
+```
+
+- Apple Silicon (MPS) - follow PyTorch MPS instructions (example):
+
+```bash
+pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/mps
+```
+
+- AMD / ROCm: follow the official PyTorch ROCm install instructions for your distribution (see https://pytorch.org).
+
+- CPU-only systems:
+
+```bash
+pip install torch torchaudio torchvision
+```
+
+Notes:
+- Only install the CUDA wheel if you have an NVIDIA GPU and matching drivers; installing a GPU wheel on a CPU-only system can produce subtle runtime errors.
+- If you encounter the `torchvision::nms` error, force-reinstall matching PyTorch/TorchVision wheels (see Troubleshooting below).
+
+### 3. Finalize Dependencies (Critical)
+Some libraries may downgrade during installation. Run this command to ensure the GPU translation engine is up to date and compatible with your drivers:
+
+```bash
+pip install --upgrade ctranslate2
+```
+
+## 🔌 API Mode (Subtitle Edit Integration)
+
+Anchor can run as a local translation API server, compatible with **Subtitle Edit's Auto-Translate** feature. This lets you use Anchor's NLLB translation engine directly from within Subtitle Edit.
+
+Start the API server with:
+
+```bash
+anchor --api
+```
+
+The server will idle with no VRAM usage and automatically load the translation model on the first request, unloading it again after the configured idle timeout.
+
+### ⚙️ Configuration
+
+The API server is configured via `~/.anchor/config.json`:
+
+```json
+"api_server": {
+    "host": "127.0.0.1",
+    "port": 6060,
+    "idle_timeout_seconds": 60
+}
+```
+
+| Setting | Description |
+| :--- | :--- |
+| `host` | `127.0.0.1` for local access only. Change to `0.0.0.0` to allow access from other machines on the network. |
+| `port` | The port the API listens on. |
+| `idle_timeout_seconds` | How long (in seconds) the model stays in VRAM after the last request before being unloaded. |
+
+### 🖥️ Subtitle Edit Setup
+
+1. In Subtitle Edit, open **Auto-translate** (Video → Auto-translate).
+2. In the engine dropdown, select **thammegowda-nllb-serve**.
+3. Set the URL to `http://<host>:<port>/translate` (e.g. `http://192.168.2.195:6060/translate` if accessing from another machine).
+4. Select your source and target languages and click **Translate**.
+
+> ⚠️ If running Anchor on a different machine than Subtitle Edit, make sure to set `host` to `0.0.0.0` in the config.
+
+### 🔄 Running in the Background
+
+**Linux — using `nohup`:**
+```bash
+nohup anchor --api > ~/.anchor/api.log 2>&1 &
+echo $! > ~/.anchor/api.pid
+```
+
+To stop it:
+```bash
+kill $(cat ~/.anchor/api.pid)
+```
+
+**Linux — as a systemd service** (runs on boot):
+
+First, find the full path to the anchor binary:
+```bash
+which anchor
+```
+
+Create `/etc/systemd/system/anchor-api.service`:
+```ini
+[Unit]
+Description=Anchor Subtitle API
+After=network.target
+
+[Service]
+User=YOUR_USERNAME
+ExecStart=/home/YOUR_USERNAME/.local/bin/anchor --api
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Replace `YOUR_USERNAME` and the `ExecStart` path with the output from `which anchor`. Then enable it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now anchor-api
+```
+
+**Windows — using PowerShell:**
+```powershell
+Start-Process anchor --api -WindowStyle Hidden
+```
 
 ## How It Works - Under the Hood
 
@@ -188,71 +340,6 @@ Here is a simplified breakdown of how the scoring works:
 | **Network** | `+ Medium` | Matches the specific network. |
 | **SDH/Forced Preference** | `+/-` | Awards or deducts points based on your `prefer_sdh` and `prefer_forced` configuration setting. |
 | **Wrong Episode** | `-100` | **Instant Rejection.** If the season or episode numbers do not match perfectly, it is heavily penalized to prevent downloading the wrong file. |
-
-
-## 🚀 Requirements
-
-* **OS:** Linux | Windows | MacOS
-* **GPU:** GPU Recommended, CPU only is possible (but slower)
-* **Python:** 3.10 or 3.11
-* **ffmpeg / ffprobe:** required for audio probing, metadata language detection, and audio extraction
-
-## 📦 Installation
-
-### 1. Install Anchor
-Install the tool directly from the repository.
-
-```bash
-pip install anchor-sub-sync
-```
-
-**⚠️ Important:** Because this tool relies on hardware acceleration, standard `pip install` often pulls the wrong drivers (CPU versions). If it does not work out of the box, please follow these steps in order.
-
-### 2. Install PyTorch (choose per hardware)
-
-Before installing PyTorch, run a few quick checks to detect your hardware:
-
-```bash
-# NVIDIA / CUDA
-nvidia-smi || true
-python3 -c "import torch; print('cuda', torch.cuda.is_available(), getattr(torch.cuda, 'get_device_name', lambda i: '')(0))"
-
-# Apple Silicon (MPS)
-python3 -c "import torch; print('mps', torch.backends.mps.is_available())"
-```
-
-Then install the appropriate build:
-
-- NVIDIA GPU with CUDA drivers installed:
-
-```bash
-pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu121
-```
-
-- Apple Silicon (MPS) - follow PyTorch MPS instructions (example):
-
-```bash
-pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/mps
-```
-
-- AMD / ROCm: follow the official PyTorch ROCm install instructions for your distribution (see https://pytorch.org).
-
-- CPU-only systems:
-
-```bash
-pip install torch torchaudio torchvision
-```
-
-Notes:
-- Only install the CUDA wheel if you have an NVIDIA GPU and matching drivers; installing a GPU wheel on a CPU-only system can produce subtle runtime errors.
-- If you encounter the `torchvision::nms` error, force-reinstall matching PyTorch/TorchVision wheels (see Troubleshooting below).
-
-### 3. Finalize Dependencies (Critical)
-Some libraries may downgrade during installation. Run this command to ensure the GPU translation engine is up to date and compatible with your drivers:
-
-```bash
-pip install --upgrade ctranslate2
-```
 
 ## 🛠️ Troubleshooting
 

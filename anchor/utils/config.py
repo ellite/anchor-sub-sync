@@ -22,6 +22,11 @@ DEFAULT_CONFIG = {
         "audio_model": None,
         "batch_size": None,
         "translation_model": None
+    },
+    "api_server": {
+        "host": "127.0.0.1",
+        "port": 5000,
+        "idle_timeout_seconds": 60
     }
 }
 

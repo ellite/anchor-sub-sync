@@ -10,3 +10,6 @@ langdetect
 transformers
 huggingface_hub
 requests
+fastapi
+uvicorn
+pydantic

@@ -8,6 +8,7 @@ from .hardware import get_compute_device
 from .utils.args import parse_arguments
 from .utils.selections import select_container_mode, select_run_mode, select_pointsync_mode
 from .utils.config import load_config
+from .api.api import run_apimode
 from .core.audiosync.audiosync import run_audiosync
 from .core.pointsync.pointsync import run_pointsync
 from .core.translate.translate import run_translation
@@ -44,7 +45,9 @@ def main():
 
         # Check if it should run in unattended mode
         # If -s / --subtitle is porvided, it will run in unattended mode.
-        if args.subtitle:
+        if args.api:
+            run_apimode(args, device, model_size, compute_type, batch_size, translation_model, console, config)           
+        elif args.subtitle:
             # If -v / --video is provided together with -s, it's a audio sync
             if args.video:
                 run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console)

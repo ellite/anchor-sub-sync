@@ -5,6 +5,7 @@ import gc
 import torch
 import copy
 import re
+from typing import List, Tuple
 from rich.console import Console
 from rich.progress import Progress, TaskID
 from huggingface_hub import snapshot_download
@@ -232,14 +233,14 @@ def _translate_ct2_batch(batch, tokenizer, translator, forced_bos, beam_size=4, 
     )
 
 
-# ---------- Main Translation Function ----------
+# Main CLI Translation Function (For Subtitle Files)
 
 def translate_subtitle_nllb(
     sub: pysubs2.SSAFile, 
     source_code: str, 
     target_code: str, 
     device="cpu", 
-    model_id="JustFrederik/nllb-200-distilled-600M-ct2-int8",
+    model_id="JustFrederik/nllb-200-distilled-600M-ct2-float16",
     progress: Progress = None,
     task_id: TaskID = None
 ) -> pysubs2.SSAFile:
@@ -281,7 +282,7 @@ def translate_subtitle_nllb(
         translator = ctranslate2.Translator(
             model_path, 
             device=device,
-            compute_type="int8"
+            compute_type="auto"
         )
         
         tokenizer = transformers.AutoTokenizer.from_pretrained(TOKENIZER_ID)
@@ -296,15 +297,32 @@ def translate_subtitle_nllb(
         for i in range(0, len(all_lines), batch_size):
             batch = all_lines[i : i + batch_size]
             
-            # ALL-CAPS Trick
-            model_batch = [line.capitalize() if is_all_upper(line) else line for line in batch]
+            model_batch = []
+            valid_indices = []
+            batch_out = [""] * len(batch)
             
-            decoded_batch = _translate_ct2_batch(
-                model_batch, tokenizer, translator, forced_bos,
-                beam_size=4, length_penalty=1.0, repetition_penalty=1.2, no_repeat_ngram_size=3
-            )
-            
-            translated_lines.extend(decoded_batch)
+            for j, line in enumerate(batch):
+                if not any(c.isalpha() for c in line):
+                    batch_out[j] = line
+                else:
+                    valid_indices.append(j)
+                    if is_all_upper(line):
+                        model_batch.append(line.capitalize()) 
+                    else:
+                        model_batch.append(line)
+
+            # Only translate the lines that actually made it into model_batch
+            if model_batch:
+                decoded_batch = _translate_ct2_batch(
+                    model_batch, tokenizer, translator, forced_bos,
+                    beam_size=4, length_penalty=1.0, repetition_penalty=1.2, no_repeat_ngram_size=3
+                )
+                
+                # Map the translated text back into the blank template
+                for valid_idx, trans in zip(valid_indices, decoded_batch):
+                    batch_out[valid_idx] = trans
+                    
+            translated_lines.extend(batch_out)
 
             if progress and task_id is not None:
                 progress.advance(task_id, advance=len(batch))
@@ -319,6 +337,7 @@ def translate_subtitle_nllb(
                 fallback_indices.append(idx)
                 fallback_sources.append(src.capitalize() if is_all_upper(src) else src)
                 
+        # Fallback Duel & Surgeon Pass
         if fallback_indices:
             if progress:
                 progress.console.print(f"   [dim]🔍 Found {len(fallback_indices)} suspicious lines. Running fallback duel...[/dim]")
@@ -357,9 +376,14 @@ def translate_subtitle_nllb(
                         beam_size=4, length_penalty=1.0, repetition_penalty=1.2, no_repeat_ngram_size=3
                     )
                     
-                    surgeon_tgt = " ".join(chunk_results)
+                    # Clean the chunks of hallucinated hyphens BEFORE gluing them together!
+                    cleaned_chunks = []
+                    for c_src, c_tgt in zip(chunks, chunk_results):
+                        c_tgt = strip_hallucinated_dialogue(c_src, c_tgt)
+                        cleaned_chunks.append(c_tgt)
+                    
+                    surgeon_tgt = " ".join(cleaned_chunks)
                     candidates.append((surgeon_tgt, calculate_suspicion_score(src, surgeon_tgt)))
-                # ------------------------
 
                 # Find the candidate with the lowest suspicion score
                 best_tgt, best_score = min(candidates, key=lambda x: x[1])
@@ -410,3 +434,145 @@ def translate_subtitle_nllb(
         if tokenizer: del tokenizer
         gc.collect()
         if device == "cuda": torch.cuda.empty_cache()
+
+# API Functions (For Raw Text Arrays)
+
+def load_model(model_id: str, device: str = "cpu", compute_type: str = "auto") -> Tuple[transformers.PreTrainedTokenizer, ctranslate2.Translator]:
+    """
+    Loads the NLLB tokenizer and CTranslate2 model into VRAM persistently.
+    Designed for the API watchdog so it doesn't constantly reload from disk.
+    """
+    model_path = snapshot_download(repo_id=model_id)
+    
+    translator = ctranslate2.Translator(
+        model_path, 
+        device=device,
+        compute_type=compute_type
+    )
+    
+    tokenizer = transformers.AutoTokenizer.from_pretrained(TOKENIZER_ID)
+    
+    return tokenizer, translator
+
+def translate_lines_nllb(
+    lines: List[str], 
+    source_lang: str, 
+    target_lang: str, 
+    tokenizer: transformers.PreTrainedTokenizer, 
+    translator: ctranslate2.Translator, 
+    batch_size: int = 32
+) -> List[str]:
+    """
+    Translates a raw list of strings, applying the same guardrails, fallback 
+    duels, and formatting fixes as the subtitle pipeline.
+    """
+    if not lines:
+        return []
+        
+    # Configure language tokens for NLLB
+    tokenizer.src_lang = source_lang
+    tokenizer.tgt_lang = target_lang
+    forced_bos = target_lang 
+
+    translated_lines = []
+    
+    # 1. Main Batch Translation
+    for i in range(0, len(lines), batch_size):
+        batch = lines[i : i + batch_size]
+        
+        model_batch = []
+        valid_indices = []
+        batch_out = [""] * len(batch)
+        
+        for j, line in enumerate(batch):
+            # No letters? Don't translate it.
+            if not any(c.isalpha() for c in line):
+                batch_out[j] = line
+            else:
+                valid_indices.append(j)
+                if is_all_upper(line):
+                    model_batch.append(line.capitalize()) 
+                else:
+                    model_batch.append(line)
+
+        if model_batch:
+            decoded_batch = _translate_ct2_batch(
+                model_batch, tokenizer, translator, forced_bos,
+                beam_size=4, length_penalty=1.0, repetition_penalty=1.2, no_repeat_ngram_size=3
+            )
+            
+            for valid_idx, trans in zip(valid_indices, decoded_batch):
+                batch_out[valid_idx] = trans
+                
+        translated_lines.extend(batch_out)
+
+    # 2. Suspicion Scoring
+    fallback_threshold = 20.0
+    fallback_indices = []
+    fallback_sources = []
+    
+    for idx, (src, tgt) in enumerate(zip(lines, translated_lines)):
+        if calculate_suspicion_score(src, tgt) >= fallback_threshold:
+            fallback_indices.append(idx)
+            fallback_sources.append(src.capitalize() if is_all_upper(src) else src)
+            
+    # 3. Fallback Duel & Surgeon Pass
+    if fallback_indices:
+        fallback_out_lines = []
+        for i in range(0, len(fallback_sources), batch_size):
+            batch = fallback_sources[i:i+batch_size]
+            
+            # Brute-Force Literal Settings
+            decoded_batch = _translate_ct2_batch(
+                batch, tokenizer, translator, forced_bos,
+                beam_size=2, length_penalty=2.0, repetition_penalty=1.0, no_repeat_ngram_size=0
+            )
+            fallback_out_lines.extend(decoded_batch)
+            
+        for i, original_idx in enumerate(fallback_indices):
+            src = lines[original_idx]
+            old_tgt = translated_lines[original_idx]
+            greedy_tgt = fallback_out_lines[i]
+            
+            candidates = [
+                (old_tgt, calculate_suspicion_score(src, old_tgt)),
+                (greedy_tgt, calculate_suspicion_score(src, greedy_tgt))
+            ]
+            
+            # SURGEON PASS
+            chunks = [c.strip() for c in re.split(r'(?<=[.!?])\s+', src) if c.strip()]
+            
+            if len(chunks) > 1:
+                chunk_batch = [c.capitalize() if is_all_upper(c) else c for c in chunks]
+                chunk_results = _translate_ct2_batch(
+                    chunk_batch, tokenizer, translator, forced_bos,
+                    beam_size=4, length_penalty=1.0, repetition_penalty=1.2, no_repeat_ngram_size=3
+                )
+                
+                cleaned_chunks = []
+                for c_src, c_tgt in zip(chunks, chunk_results):
+                    c_tgt = strip_hallucinated_dialogue(c_src, c_tgt)
+                    cleaned_chunks.append(c_tgt)
+                
+                surgeon_tgt = " ".join(cleaned_chunks)
+                candidates.append((surgeon_tgt, calculate_suspicion_score(src, surgeon_tgt)))
+
+            # Find the candidate with the lowest suspicion score
+            best_tgt, best_score = min(candidates, key=lambda x: x[1])
+            if best_tgt != old_tgt:
+                translated_lines[original_idx] = best_tgt
+
+    # 4. Deterministic Guardrail Fixes
+    for idx, (src, tgt) in enumerate(zip(lines, translated_lines)):
+        clean_tgt = crush_stutter_loops(src, tgt)
+        clean_tgt = enforce_short_answers(src, clean_tgt)
+        clean_tgt = strip_hallucinated_dialogue(src, clean_tgt)
+        clean_tgt = protect_isolated_names(src, clean_tgt)
+        clean_tgt = clean_typography(clean_tgt)
+        
+        if is_all_upper(src):
+            translated_lines[idx] = clean_tgt.upper()
+        else:
+            translated_lines[idx] = clean_tgt
+
+    return translated_lines

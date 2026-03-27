@@ -98,29 +98,23 @@ def select_model_size(memory_gb, is_gpu=True):
 def select_translation_model(memory_gb, is_gpu=True):
     """
     Selects the best NLLB translation model based on memory.
-    Returns the HuggingFace ID for the CTranslate2 INT8 model.
     """
-    # Specific Repos for CTranslate2 INT8 models
-    NLLB_600M = "JustFrederik/nllb-200-distilled-600M-ct2-int8" # ~0.6 GB VRAM
-    NLLB_1_3B = "OpenNMT/nllb-200-distilled-1.3B-ct2-int8"    # ~1.5 GB VRAM
-    NLLB_3_3B = "OpenNMT/nllb-200-3.3B-ct2-int8"              # ~3.5 GB VRAM
+    # Note: 3.3B in float16 is ~7GB, 1.3B is ~2.6GB, 600M is ~1.2GB
+    NLLB_600M = "JustFrederik/nllb-200-distilled-600M-ct2-float16" 
+    NLLB_1_3B = "JustFrederik/nllb-200-distilled-1.3B-ct2-float16"
+    NLLB_3_3B = "JustFrederik/nllb-200-3.3B-ct2-float16"
 
     if not is_gpu:
-        # CPU is slower, stick to the lightweight distilled model unless lots of RAM
-        if memory_gb > 16:
-            return NLLB_1_3B
-        return NLLB_600M
+        # Stick to int8 for CPU usually, as float16 is slow on most CPUs
+        return "JustFrederik/nllb-200-distilled-600M-ct2-int8"
 
-    # GPU Logic
-    # Apply a stricter buffer because we might want to load this alongside other things
-    # or ensure smoothness.
-    
-    if memory_gb >= 8:
-        return NLLB_3_3B # Best quality
-    elif memory_gb >= 4:
-        return NLLB_1_3B # Great balance (RTX 2000e target)
+    # GPU Logic with updated VRAM thresholds for float16
+    if memory_gb >= 12:
+        return NLLB_3_3B # Needs ~7GB + Whisper overhead
+    elif memory_gb >= 6:
+        return NLLB_1_3B 
     else:
-        return NLLB_600M # Fast
+        return NLLB_600M
 
 def get_compute_device(force_model=None, force_batch=None, force_translation_model=None):
     """
@@ -247,9 +241,9 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
     if force_translation_model:
         # Define Aliases for ease of use
         aliases = {
-            "small":  "JustFrederik/nllb-200-distilled-600M-ct2-int8",
-            "medium": "OpenNMT/nllb-200-distilled-1.3B-ct2-int8",
-            "large":  "OpenNMT/nllb-200-3.3B-ct2-int8",
+            "small":  "JustFrederik/nllb-200-distilled-600M-ct2-float16",
+            "medium": "JustFrederik/nllb-200-distilled-1.3B-ct2-float16",
+            "large":  "JustFrederik/nllb-200-3.3B-ct2-float16",
         }
 
         # Define the exact valid list (The Aliases + The Raw IDs)
@@ -257,9 +251,9 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
         
         # ...and add the raw strings from our valid list so they map to themselves
         raw_valid_models = [
-            "JustFrederik/nllb-200-distilled-600M-ct2-int8",
-            "OpenNMT/nllb-200-distilled-1.3B-ct2-int8",
-            "OpenNMT/nllb-200-3.3B-ct2-int8"
+            "JustFrederik/nllb-200-distilled-600M-ct2-float16",
+            "JustFrederik/nllb-200-distilled-1.3B-ct2-float16",
+            "JustFrederik/nllb-200-3.3B-ct2-float16"
         ]
         
         for m in raw_valid_models:
