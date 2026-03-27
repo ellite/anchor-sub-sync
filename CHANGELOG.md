@@ -2,6 +2,13 @@
 
 
 
+## v1.13.1 (2026-03-27)
+
+### Fix
+
+* fix: default to cpu if amd gpu doesn&#39;t have the correct ctranslate2 ([`c1c87c2`](https://github.com/ellite/anchor-sub-sync/commit/c1c87c22d42076073f34b23fd59e8bb281d8b5ce))
+
+
 ## v1.13.0 (2026-03-27)
 
 ### Feature
