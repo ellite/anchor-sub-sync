@@ -77,6 +77,12 @@ pip install torch torchaudio torchvision --index-url https://download.pytorch.or
 
 - AMD / ROCm: follow the official PyTorch ROCm install instructions for your distribution (see https://pytorch.org).
 
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm7.1
+```
+
+> ⚠️ **AMD GPU acceleration requires a ROCm-compatible CTranslate2 build.** The standard `pip install ctranslate2` only supports NVIDIA CUDA and CPU. Anchor will automatically detect this at startup and fall back to CPU if the standard build is installed. To enable full AMD GPU acceleration, you must build CTranslate2 with ROCm support from source — see the [AMD CTranslate2 ROCm guide](https://rocm.blogs.amd.com/artificial-intelligence/ctranslate2/README.html). Without it, Anchor still works correctly on CPU.
+
 - CPU-only systems:
 
 ```bash
@@ -93,6 +99,8 @@ Some libraries may downgrade during installation. Run this command to ensure the
 ```bash
 pip install --upgrade ctranslate2
 ```
+
+> ⚠️ **AMD ROCm users:** Skip this step if you have built CTranslate2 from source with ROCm support. Running `pip install --upgrade ctranslate2` will replace your custom build with the standard CUDA-only wheel, reverting GPU acceleration back to CPU.
 
 ## 🔌 API Mode (Subtitle Edit Integration)
 
@@ -369,6 +377,26 @@ pip install "numpy<2.0" "pandas<2.0"
 ```bash
 pip install windows-curses
 ```
+
+### AMD GPU: Transcription/Translation Running on CPU Instead of GPU
+
+Anchor detected your AMD GPU but is running on CPU. This is expected behaviour if the standard `pip install ctranslate2` wheel is installed, as it has no ROCm support.
+
+To verify which mode Anchor selected, check the startup output:
+- ✅ `ROCm-compatible CTranslate2 detected. GPU acceleration enabled.` — GPU is active.
+- ⚠️ `CTranslate2 has no ROCm support in this install. Falling back to CPU.` — CPU fallback is active.
+
+To enable GPU acceleration on AMD GPU, build CTranslate2 with ROCm from source:
+```bash
+# See full instructions at:
+# https://rocm.blogs.amd.com/artificial-intelligence/ctranslate2/README.html
+```
+
+Additionally, on some distros (e.g. Fedora), `torchaudio` may fail to find ROCm libraries. Fix it by exporting:
+```bash
+export LD_LIBRARY_PATH=$(python3 -c 'import torch; import os; print(os.path.dirname(torch.__file__))')/lib:$LD_LIBRARY_PATH
+```
+*(Add to `~/.bashrc` to make it permanent.)*
 
 ## 🎬 Usage
 
