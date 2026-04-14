@@ -81,6 +81,14 @@ def parse_arguments():
         action="store_true",
         help="Enable API mode.",
         default=False
+
     )
+    # Allows users to bypass metadata and force a specific audio language (useful for broken metadata)
+    parser.add_argument(
+        "--audio-language",
+        type=str,
+        help="Manually specify the video's audio language (e.g. 'en', 'sv') bypassing metadata."
+)
+
     
     return parser.parse_args()

@@ -13,3 +13,4 @@ requests
 fastapi
 uvicorn
 pydantic
+ffmpeg-python

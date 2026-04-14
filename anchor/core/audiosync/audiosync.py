@@ -104,20 +104,35 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
         console.print(f"\n[bold reverse] Task {i}/{len(queue)} [/bold reverse] [cyan]{sub.name}[/cyan]")
         console.print(f"🎬 Video: [yellow]{vid.name}[/yellow]")
         
-        # Detection
-        meta_lang = get_audio_language(vid) 
-        if meta_lang:
-            console.print(f"[dim]🌐 Metadata language detected: [bold cyan]{meta_lang.upper()}[/bold cyan][/dim]")
+    # Detection & Language Override
+        audio_lang = None
+
+        # Priority 1: Check if the user manually specified the language via CLI
+        if getattr(args, "audio_language", None):
+            audio_lang = args.audio_language.lower()
+            console.print(f"[dim]🌐 Audio language manually overridden to: [bold cyan]{audio_lang.upper()}[/bold cyan][/dim]")
         else:
-            console.print("[dim]🌐 Language metadata missing. Using Auto-detect.[/dim]")
+            # Priority 2: Attempt to read language from video metadata
+            audio_lang = get_audio_language(vid)
+            if audio_lang:
+                console.print(f"[dim]🌐 Metadata language detected: [bold cyan]{audio_lang.upper()}[/bold cyan][/dim]")
+            else:
+                # Priority 3: True auto-detect by sampling the audio if metadata is missing
+                console.print("[dim]🌐 Language metadata missing. Auto-detecting via audio sample...[/dim]")
+                from ...utils.whisper import detect_audio_language_whisper
+                audio_lang = detect_audio_language_whisper(vid, device, compute_type)
+                console.print(f"[dim]🌐 Whisper Auto-detected audio: [bold cyan]{audio_lang.upper()}[/bold cyan][/dim]")
 
         sub_lang = get_subtitle_language(sub)
-        console.print(f"[dim]📄 Subtitle language detected: [bold cyan]{sub_lang.upper()}[/bold cyan][/dim]")    
+        console.print(f"[dim]📄 Subtitle language detected: [bold cyan]{sub_lang.upper()}[/bold cyan][/dim]")
 
         needs_translation = False
-        if meta_lang and sub_lang != "unknown" and meta_lang != sub_lang:
-            console.print(f"[dim]⚠️ Mismatch detected: Audio is {meta_lang.upper()}, Subtitle is {sub_lang.upper()}. Needs translation.[/dim]")
+        if audio_lang and sub_lang != "unknown" and audio_lang != sub_lang:
+            console.print(f"[dim]⚠️ Mismatch detected: Audio is {audio_lang.upper()}, Subtitle is {sub_lang.upper()}. Needs translation.[/dim]")
             needs_translation = True
+
+        # Re-assign to meta_lang to maintain compatibility with the rest of the script
+        meta_lang = audio_lang
 
         # Default: Sync the original file path
         sub_input_for_sync = sub      

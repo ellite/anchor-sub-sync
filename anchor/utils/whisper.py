@@ -10,6 +10,11 @@ from .ui import make_ui_console, CaptureProgress
 from .files import open_subtitle
 from .alignment import GlobalAligner
 
+#for auto-detect-fix
+import ffmpeg
+import numpy as np
+from collections import Counter
+
 console = Console()
 
 def load_whisper_model(device, compute_type, language, model_size="large-v3"):
@@ -189,3 +194,62 @@ def run_anchor_sync(video_path, sub_path, device, compute_type, batch_size, mode
     
     return output_path, len(original_subs), rejected
     
+
+def detect_audio_language_whisper(video_path, device, compute_type):
+    """
+    Extracts three 30-second audio samples (at 30%, 50%, and 70%) and uses WhisperX
+    to detect the language, using a majority vote to ensure high accuracy.
+    """
+    try:
+        # Probe the video (silently) to find its total duration
+        probe = ffmpeg.probe(str(video_path), v='error')
+        duration = float(probe['format']['duration'])
+
+        # Define our three jump points (30%, 50%, 70%)
+        fractions = [0.3, 0.5, 0.7]
+        detected_languages = []
+
+        # Load the model ONCE outside the loop to save massive amounts of time
+        model = whisperx.load_model("base", device, compute_type=compute_type, asr_options={"without_timestamps": True})
+
+        # Loop through our three points in the video
+        for frac in fractions:
+            start_time = duration * frac
+
+            try:
+                # Extract 30 seconds, silencing FFmpeg
+                out, _ = (
+                    ffmpeg
+                    .input(str(video_path), ss=start_time, t=30)
+                    .output('-', format='s16le', acodec='pcm_s16le', ac=1, ar='16k')
+                    .global_args('-loglevel', 'error')
+                    .run(capture_stdout=True, capture_stderr=True)
+                )
+
+                # Convert the raw audio buffer
+                audio = np.frombuffer(out, np.int16).flatten().astype(np.float32) / 32768.0
+
+                # Analyze this specific clip
+                result = model.transcribe(audio)
+
+                # If speech was found, add it to our voting pool
+                if "language" in result and result["language"] != "unknown":
+                    detected_languages.append(result["language"])
+
+            except Exception:
+                # If one specific clip fails (e.g., end of file), just ignore it and try the next
+                continue
+
+        # --- THE VOTING SYSTEM ---
+        if detected_languages:
+            # Counter counts occurrences. most_common(1) returns e.g., [('en', 2)]
+            # We then extract just the language code from that nested result.
+            winner = Counter(detected_languages).most_common(1)[0][0]
+            return winner
+        else:
+            # Absolute fallback if ALL three clips were purely silent
+            return "en"
+
+    except Exception as e:
+        # Fallback if the entire file is unreadable
+        return "en"
