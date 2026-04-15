@@ -2,6 +2,7 @@ import sys
 import time
 import gc
 import torch
+import shutil
 import pysubs2
 from pathlib import Path
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, BarColumn, TaskProgressColumn
@@ -120,12 +121,20 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
             needs_translation = True
 
         # Default: Sync the original file path
-        sub_input_for_sync = sub      
-        
+        sub_input_for_sync = sub
+
+        # If the user enabled overwrite, create a backup of the original file now
+        if getattr(args, "overwrite", False):
+            backup_path = sub.with_name(f"{sub.name}.bak")
+            # Only create backup if the original file exists and no backup exists yet
+            if sub.exists() and not backup_path.exists():
+                shutil.copy(sub, backup_path)
+                console.print(f"[dim]📦 Created backup of original: {backup_path.name}[/dim]")
+
         # Variables for cleanup later
-        original_sub_object = None    
-        ghost_file_path = None        
-        
+        original_sub_object = None
+        ghost_file_path = None
+
         # Translation
         if needs_translation:
             # Load the ORIGINAL content into memory now

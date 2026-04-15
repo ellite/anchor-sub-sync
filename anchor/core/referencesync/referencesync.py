@@ -1,6 +1,7 @@
 import sys
 import time
 import pysubs2
+import shutil
 from pathlib import Path
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, BarColumn, TaskProgressColumn
 
@@ -99,7 +100,15 @@ def run_referencesync(args, device, translation_model, console):
             console.print(f"[dim]⚠️ Mismatch detected. Translating Target ({target_lang.upper()}) to match Reference ({ref_lang.upper()}).[/dim]")
             needs_translation = True
 
-        sub_input_for_sync = target_sub      
+        # If the user enabled overwrite, create a backup of the target file now
+        if getattr(args, "overwrite", False):
+            backup_path = target_sub.with_name(f"{target_sub.name}.bak")
+            # Only create backup if the original file exists and no backup exists yet
+            if target_sub.exists() and not backup_path.exists():
+                shutil.copy(target_sub, backup_path)
+                console.print(f"[dim]📦 Created backup of original: {backup_path.name}[/dim]")
+
+        sub_input_for_sync = target_sub
         original_sub_object = None    
         ghost_file_path = None        
         
