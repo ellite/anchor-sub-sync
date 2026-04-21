@@ -40,35 +40,40 @@ def run_referencesync(args, device, translation_model, console):
 
     # PATH B: INTERACTIVE MODE
     else:
-        subs = get_files(SUPPORTED_EXTENSIONS)
-        if len(subs) < 2:
-            console.print("[bold red]❌ You need at least TWO subtitle files in this folder for a reference sync![/]")
+        sub_files = get_files(SUPPORTED_EXTENSIONS)
+        if not sub_files:
+            console.print("[bold red]❌ No subtitle files found in the current directory.[/bold red]")
             return
 
-        # Prompt 1: The Target
-        console.print("\n[bold cyan]🎯 Step 1: Select TARGET Subtitle(s) to be fixed[/bold cyan]")
-        selected_targets = select_files_interactive(subs, header_lines=["Select the subtitle file you want to sync (the 'target')."], multi_select=False)
-        if not selected_targets:
-            console.print("[yellow]No target files selected. Returning to menu.[/yellow]")
-            return
+        while True:
+            # Prompt 1: The Target
+            console.print("\n[bold cyan]🎯 Step 1: Select TARGET Subtitle to be fixed[/bold cyan]")
+            target_selection = select_files_interactive(sub_files, header_lines=["Select Target Subtitle (to be synced):"], multi_select=False)
+            if not target_selection:
+                break # abort if user presses 'q'
+            target_path = target_selection[0]
 
-        # Prompt 2: The Reference
-        # Filter out the selected target so it doesn't accidentally get picked as the reference
-        remaining_subs = [s for s in subs if s not in selected_targets]
-        if not remaining_subs:
-            console.print("[bold red]❌ No other subtitles left to act as a reference![/]")
-            return
+            # Filter Target file from Reference list
+            remaining_subs = [s for s in sub_files if s != target_path]
+            if not remaining_subs:
+                console.print("[bold red]❌ No other subtitles left to act as a reference![/]")
+                break
 
-        console.print("\n[bold green]📑 Step 2: Select the perfectly timed REFERENCE Subtitle[/bold green]")
-        selected_refs = select_files_interactive(remaining_subs, header_lines=["Select the perfectly synced subtitle file to use as reference for syncing."], multi_select=False)
-        if not selected_refs:
-            console.print("[yellow]No reference file selected. Returning to menu.[/yellow]")
-            return
-        
-        reference_sub = selected_refs[0] 
+            # Prompt 2: The Reference
+            console.print("\n[bold green]📑 Step 2: Select the perfectly timed REFERENCE Subtitle[/bold green]")
+            ref_selection = select_files_interactive(remaining_subs, header_lines=["Select Reference Subtitle (already synced):"], multi_select=False)
+            if not ref_selection:
+                break # abort if user presses 'q'
+            ref_path = ref_selection[0]
 
-        for target in selected_targets:
-            queue.append((target, reference_sub))
+            queue.append((target_path, ref_path))
+
+            # Asks if user wants to add additional syncs to the queue
+            choice = input("\n➕ Do you want to add another pair to the queue? (y/n): ")
+            if choice.lower() != 'y':
+                break
+
+        console.print(f"\n[bold green]✅ Queue built with {len(queue)} pairs. Starting sync...[/bold green]\n")
 
     if not queue:
         return
