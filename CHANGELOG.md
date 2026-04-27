@@ -2,6 +2,13 @@
 
 
 
+## v1.15.0 (2026-04-27)
+
+### Feature
+
+* feat: add cli argument to backup original files when overwritting ([`612240b`](https://github.com/ellite/anchor-sub-sync/commit/612240b93f22c55ba876711170e263ac6f2f80dd))
+
+
 ## v1.14.1 (2026-04-27)
 
 ### Fix
