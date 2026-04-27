@@ -36,6 +36,10 @@ def find_best_video_match(sub_path):
             
     return None
 
+def backup_if_needed(path: Path, args) -> None:
+    if args and getattr(args, "backup", False) and path.exists():
+        path.rename(path.with_suffix(path.suffix + ".bak"))
+
 def open_subtitle(path: Path, **kwargs) -> pysubs2.SSAFile:
     """
     Attempts to load a subtitle file using various common encodings.

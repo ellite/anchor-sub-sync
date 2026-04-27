@@ -5,7 +5,7 @@ import torch
 import pysubs2
 from pathlib import Path
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, BarColumn, TaskProgressColumn
-from ...utils.files import get_files, find_best_video_match, select_video_fallback, open_subtitle, select_files_interactive
+from ...utils.files import get_files, find_best_video_match, select_video_fallback, open_subtitle, select_files_interactive, backup_if_needed
 from ...utils.mappings import get_language_code_for_nllb
 from ...utils.languages import get_audio_language, get_subtitle_language
 from ...utils.whisper import run_whisper_transcription, run_anchor_align_and_sync, load_whisper_model
@@ -254,6 +254,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                     orig_event.end = ghost_event.end
 
                 if args and getattr(args, "overwrite", False):
+                    backup_if_needed(sub, args)
                     final_output_path = sub
                     console.print(f"[dim]💾 Overwriting original subtitle: {final_output_path.name}[/dim]")
                 else:

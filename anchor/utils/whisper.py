@@ -7,7 +7,7 @@ import whisperx
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 from .ui import make_ui_console, CaptureProgress
-from .files import open_subtitle
+from .files import open_subtitle, backup_if_needed
 from .alignment import GlobalAligner
 
 console = Console()
@@ -176,6 +176,7 @@ def run_anchor_align_and_sync(sub_path, whisper_data, args=None):
         raise Exception("Zero matches found.")
 
     if args and getattr(args, "overwrite", False):
+        backup_if_needed(sub_path, args)
         output_path = sub_path
         console.print(f"[dim]💾 Overwriting original subtitle: {output_path.name}[/dim]")
     else:

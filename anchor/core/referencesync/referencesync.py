@@ -4,7 +4,7 @@ import pysubs2
 from pathlib import Path
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, BarColumn, TaskProgressColumn
 
-from ...utils.files import get_files, open_subtitle, select_files_interactive
+from ...utils.files import get_files, open_subtitle, select_files_interactive, backup_if_needed
 from ...utils.mappings import get_language_code_for_nllb
 from ...utils.languages import get_subtitle_language
 from ..translation import translate_subtitle_nllb
@@ -189,6 +189,7 @@ def run_referencesync(args, device, translation_model, console):
                     orig_event.end = ghost_event.end
                 
                 if args and getattr(args, "overwrite", False):
+                    backup_if_needed(target_sub, args)
                     final_output_path = target_sub
                     console.print(f"[dim]💾 Overwriting original subtitle: {final_output_path.name}[/dim]")
                 else:
@@ -215,11 +216,12 @@ def run_referencesync(args, device, translation_model, console):
             if not needs_translation:
                 # If it wasn't translated, handle the final save for the native language file
                 if args and getattr(args, "overwrite", False):
+                    backup_if_needed(target_sub, args)
                     final_output_path = target_sub
                     console.print(f"[dim]💾 Overwriting original subtitle: {final_output_path.name}[/dim]")
                 else:
                     final_output_path = target_sub.with_suffix(".synced.srt")
-                
+
                 synced_subs_obj.save(str(final_output_path))
                 console.print(f"💾 Saved aligned subtitle to: [underline]{final_output_path.name}[/underline]")
                 

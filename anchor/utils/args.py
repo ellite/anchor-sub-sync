@@ -43,6 +43,12 @@ def parse_arguments():
         help="Overwrite synced files without adding .synced suffix.",
         default=False
     )
+    parser.add_argument(
+        "-B", "--backup",
+        action="store_true",
+        help="When used with --overwrite, creates a .bak copy of the original file before overwriting.",
+        default=False
+    )
 
     # Automation / Files
     parser.add_argument(

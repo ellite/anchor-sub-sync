@@ -5,7 +5,7 @@ from .common import get_filtered_lines, apply_linear_correction
 from ...utils.languages import get_subtitle_language
 from ...utils.mappings import get_language_code_for_nllb
 from ..translation import translate_subtitle_nllb
-from ...utils.files import open_subtitle
+from ...utils.files import open_subtitle, backup_if_needed
 
 console = Console()
 
@@ -102,6 +102,7 @@ def run_auto_linear_sync(target_file, reference_file, device="cpu", model_id="Ju
 
         # Save (respect overwrite flag)
         if args and getattr(args, "overwrite", False):
+            backup_if_needed(target_file, args)
             output_path = target_file
             console.print(f"[dim]💾 Overwriting original subtitle: {output_path.name}[/dim]")
         else:

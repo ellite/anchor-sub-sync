@@ -1,7 +1,7 @@
 import curses
 from rich.console import Console
 from .common import get_filtered_lines, apply_linear_correction
-from ...utils.files import open_subtitle
+from ...utils.files import open_subtitle, backup_if_needed
 
 console = Console()
 
@@ -70,6 +70,7 @@ def run_manual_sync_tui(target_file, reference_file, console=console, args=None)
 
     # Save (respect overwrite flag)
     if args and getattr(args, "overwrite", False):
+        backup_if_needed(target_file, args)
         output_path = target_file
         console.print(f"[dim]💾 Overwriting original subtitle: {output_path.name}[/dim]")
     else:
