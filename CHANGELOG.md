@@ -2,6 +2,23 @@
 
 
 
+## v1.14.0 (2026-04-27)
+
+### Chore
+
+* chore: add instructions for amd gpu to the readme ([`6d2dbf5`](https://github.com/ellite/anchor-sub-sync/commit/6d2dbf532a9accef0a0f0bd9ba07e85d0db90023))
+
+### Feature
+
+* feat: Add interactive batch queue for reference sync ([`01c726f`](https://github.com/ellite/anchor-sub-sync/commit/01c726f46b53ac77d916bdb0a554057534a598ef))
+
+### Unknown
+
+* Merge pull request #6 from Zonrotan/feature/batch-reference-sync
+
+feat: Add interactive batch queue for reference sync ([`71bbf90`](https://github.com/ellite/anchor-sub-sync/commit/71bbf90c2f7f77594834d7df094b5ae54f560437))
+
+
 ## v1.13.1 (2026-03-27)
 
 ### Fix
