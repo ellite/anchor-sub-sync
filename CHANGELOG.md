@@ -2,6 +2,13 @@
 
 
 
+## v1.14.1 (2026-04-27)
+
+### Fix
+
+* fix: audiosync skipping translation when the audio track has no language info ([`4f4b05f`](https://github.com/ellite/anchor-sub-sync/commit/4f4b05f7ad0e8049f902e4ae5b8454589c5635e3))
+
+
 ## v1.14.0 (2026-04-27)
 
 ### Chore
