@@ -7,6 +7,7 @@
 
   [![Stars](https://img.shields.io/github/stars/ellite/anchor-sub-sync?style=flat-square)](https://github.com/ellite/anchor-sub-sync)
   [![Downloads](https://img.shields.io/pepy/dt/anchor-sub-sync?style=flat-square&color=blue)](https://pepy.tech/project/anchor-sub-sync)
+  [![PyPi](https://img.shields.io/pypi/v/anchor-sub-sync.svg)](https://pypi.python.org/pypi/anchor-sub-sync/)
   [![GitHub contributors](https://img.shields.io/github/contributors/ellite/anchor-sub-sync?style=flat-square)](https://github.com/ellite/anchor-sub-sync/graphs/contributors)
   [![GitHub Sponsors](https://img.shields.io/github/sponsors/ellite?style=flat-square)](https://github.com/sponsors/ellite)
 </div>
@@ -494,6 +495,14 @@ pip install -e .
 <p align="center">
   <img src="./resources/screenshot.png" alt="Anchor screenshot" width="800" />
 </p>
+
+---
+
+## Contributors
+
+<a href="https://github.com/ellite/scrob/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=ellite/scrob" />
+</a>
 
 ---
 

@@ -8,7 +8,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from ...utils.files import get_files, find_best_video_match, select_video_fallback, open_subtitle, select_files_interactive
 from ...utils.mappings import get_language_code_for_nllb
 from ...utils.languages import get_audio_language, get_subtitle_language
-from ...utils.whisper import run_anchor_sync, load_whisper_model
+from ...utils.whisper import run_whisper_transcription, run_anchor_align_and_sync, load_whisper_model
 from ..translation import translate_subtitle_nllb
 
 # Constants
@@ -171,9 +171,9 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
         target_model = model_size
         if meta_lang and meta_lang.lower() == "en":
             if target_model in {"tiny", "base", "small", "medium"}:
-                target_model = f"{target_model}.en"   
+                target_model = f"{target_model}.en"
 
-        console.print(f"[dim]🎯 Target Model: [bold white]{target_model}[/bold white][/dim]") 
+        console.print(f"[dim]🎯 Target Model: [bold white]{target_model}[/bold white][/dim]")
 
         # Load/Reload Whisper Model
         if current_model is None or loaded_lang_code != meta_lang or needs_translation:
@@ -182,33 +182,77 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                 del current_model
                 gc.collect()
                 if device == "cuda": torch.cuda.empty_cache()
-            
+
             current_model = load_whisper_model(device, compute_type, meta_lang, target_model)
             loaded_lang_code = meta_lang
         else:
             console.print(f"[dim]♻️  Reusing cached model ({loaded_lang_code if loaded_lang_code else 'Auto'})...[/dim]")
 
-        # Run Sync
         start_time = time.time()
         try:
-            # Call the Core Logic
-            out_path, lines, rejected = run_anchor_sync(vid, sub_input_for_sync, device, compute_type, batch_size, current_model, meta_lang, args)
-            
+            # Step 1: Transcribe
+            whisper_data, detected_lang = run_whisper_transcription(vid, device, compute_type, batch_size, current_model, meta_lang)
+
+            if whisper_data is None:
+                failed_count += 1
+                continue
+
+            # Step 2: Auto-detect mismatch check (only when metadata was missing)
+            if not meta_lang:
+                console.print(f"[dim]🌐 Auto-detected audio language: [bold cyan]{detected_lang.upper()}[/bold cyan][/dim]")
+                if sub_lang != "unknown" and detected_lang != sub_lang:
+                    console.print(f"[dim]⚠️ Mismatch detected: Audio is {detected_lang.upper()}, Subtitle is {sub_lang.upper()}. Needs translation.[/dim]")
+                    needs_translation = True
+                    original_sub_object = open_subtitle(sub)
+
+                    nllb_source = get_language_code_for_nllb(sub_lang)
+                    nllb_target = get_language_code_for_nllb(detected_lang)
+
+                    status_msg = f"[bold dim] Translating subtitles from [cyan]{sub_lang.upper()}[/cyan] to [cyan]{detected_lang.upper()}[/cyan] using NLLB...[/]"
+
+                    with Progress(
+                        SpinnerColumn("dots"),
+                        TextColumn("[progress.description]{task.description}"),
+                        BarColumn(),
+                        TaskProgressColumn(),
+                        TimeElapsedColumn(),
+                        console=console,
+                        transient=True
+                    ) as progress:
+                        task = progress.add_task("Translating", total=None)
+
+                        ghost_sub = translate_subtitle_nllb(
+                            original_sub_object,
+                            nllb_source,
+                            nllb_target,
+                            device=device,
+                            model_id=translation_model,
+                            progress=progress,
+                            task_id=task
+                        )
+
+                    console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {detected_lang.upper()}).[/dim]")
+
+                    ghost_file_path = sub.with_suffix(f".tmp.{detected_lang}.srt")
+                    ghost_sub.save(str(ghost_file_path))
+                    sub_input_for_sync = ghost_file_path
+                    console.print(f"[dim]👻 Created temporary sync target: {ghost_file_path.name}[/dim]")
+
+            # Step 3: Align & Sync
+            out_path, lines, rejected = run_anchor_align_and_sync(sub_input_for_sync, whisper_data, args)
+
             # Restoration Logic
-            final_output_path = out_path # Default
-            
+            final_output_path = out_path
+
             if needs_translation and original_sub_object:
                 console.print("[dim]📥 Applying synced timestamps back to original subtitle...[/dim]")
-                
-                # Load the file Whisper just synced (translated)
+
                 synced_ghost = pysubs2.load(str(out_path))
-                
-                # Transfer timestamps to Original Object
+
                 for orig_event, ghost_event in zip(original_sub_object, synced_ghost):
                     orig_event.start = ghost_event.start
                     orig_event.end = ghost_event.end
-                
-                # Determine final name (respect overwrite flag)
+
                 if args and getattr(args, "overwrite", False):
                     final_output_path = sub
                     console.print(f"[dim]💾 Overwriting original subtitle: {final_output_path.name}[/dim]")
@@ -217,25 +261,24 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
 
                 original_sub_object.save(str(final_output_path))
                 console.print(f"💾 Restored Original Content to: [underline]{final_output_path.name}[/underline]")
-                
-                # Cleanup Temp Files
+
                 try:
                     if ghost_file_path and ghost_file_path.exists():
                         ghost_file_path.unlink()
                     if out_path.exists() and out_path != final_output_path:
-                        out_path.unlink() 
+                        out_path.unlink()
                 except Exception:
-                    pass 
+                    pass
 
             duration = time.time() - start_time
-            
+
             console.print(f"[bold green]✨ Success![/bold green] ({duration:.1f}s)")
             console.print(f" 📝 Lines Processed: {lines}")
             console.print(f" 🗑️ Outliers Rejected: {rejected}")
-            
+
             if not needs_translation:
                 console.print(f" 💾 Saved to: [underline]{final_output_path.name}[/underline]")
-            
+
         except Exception as e:
             failed_count += 1
             console.print(f"[bold red]❌ Failed:[/bold red] {e}")

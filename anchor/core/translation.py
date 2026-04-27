@@ -343,15 +343,20 @@ def translate_subtitle_nllb(
                 progress.console.print(f"   [dim]🔍 Found {len(fallback_indices)} suspicious lines. Running fallback duel...[/dim]")
                 
             fallback_out_lines = []
+            duel_task_id = progress.add_task("   [dim]Fallback duel...[/dim]", total=len(fallback_sources)) if progress else None
             for i in range(0, len(fallback_sources), batch_size):
                 batch = fallback_sources[i:i+batch_size]
-                
+
                 # Brute-Force Literal Settings
                 decoded_batch = _translate_ct2_batch(
                     batch, tokenizer, translator, forced_bos,
                     beam_size=2, length_penalty=2.0, repetition_penalty=1.0, no_repeat_ngram_size=0
                 )
                 fallback_out_lines.extend(decoded_batch)
+                if progress and duel_task_id is not None:
+                    progress.advance(duel_task_id, advance=len(batch))
+            if progress and duel_task_id is not None:
+                progress.remove_task(duel_task_id)
                 
             fixes_applied = 0
             for i, original_idx in enumerate(fallback_indices):
