@@ -500,8 +500,8 @@ pip install -e .
 
 ## Contributors
 
-<a href="https://github.com/ellite/scrob/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=ellite/scrob" />
+<a href="https://github.com/ellite/anchor-sub-sync/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=ellite/anchor-sub-sync" />
 </a>
 
 ---
