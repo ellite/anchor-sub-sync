@@ -112,7 +112,7 @@ def run_whisper_transcription(video_path, device, compute_type, batch_size, mode
     is_windows = (os.name != 'posix')
 
     if language is None:
-        console.print("[dim]🔍 Auto-detecting language via multiple samples...[/dim]")
+        console.print("[dim]🔍 Auto-detecting language via three separate samples...[/dim]")
         robust_lang = detect_robust_language(model, audio, current_batch_size)
         if robust_lang:
             language = robust_lang
