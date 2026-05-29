@@ -2,6 +2,13 @@
 
 
 
+## v1.15.2 (2026-05-29)
+
+### Fix
+
+* fix: crash on older version of transformers after fix ([`5d6ebb1`](https://github.com/ellite/anchor-sub-sync/commit/5d6ebb1b4fbe1a26a3884c035b2207ef0c4513a3))
+
+
 ## v1.15.1 (2026-05-29)
 
 ### Fix
