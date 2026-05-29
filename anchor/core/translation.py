@@ -285,7 +285,10 @@ def translate_subtitle_nllb(
             compute_type=compute_type
         )
         
-        tokenizer = transformers.AutoTokenizer.from_pretrained(model_id, legacy_behaviour=True)
+        try:
+            tokenizer = transformers.AutoTokenizer.from_pretrained(model_id, legacy_behaviour=True)
+        except TypeError:
+            tokenizer = transformers.AutoTokenizer.from_pretrained(model_id)
         tokenizer.src_lang = source_code
         tokenizer.tgt_lang = target_code
         forced_bos = target_code 
@@ -462,7 +465,10 @@ def load_model(model_id: str, device: str = "cpu", compute_type: str = "auto") -
         compute_type=compute_type
     )
     
-    tokenizer = transformers.AutoTokenizer.from_pretrained(TOKENIZER_ID)
+    try:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(model_id, legacy_behaviour=True)
+    except TypeError:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(model_id)
     
     return tokenizer, translator
 
