@@ -82,6 +82,14 @@ def parse_arguments():
         default=False
     )
     
+    # Hardware
+    parser.add_argument(
+        "--cpu",
+        action="store_true",
+        help="Force CPU execution, bypassing GPU detection.",
+        default=False
+    )
+
     # API Mode
     parser.add_argument("--api",
         action="store_true",

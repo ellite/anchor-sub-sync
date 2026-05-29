@@ -148,15 +148,16 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                 task = progress.add_task("Translating", total=None)
                 
                 ghost_sub = translate_subtitle_nllb(
-                    original_sub_object, 
-                    nllb_source, 
-                    nllb_target, 
-                    device=device, 
+                    original_sub_object,
+                    nllb_source,
+                    nllb_target,
+                    device=device,
                     model_id=translation_model,
+                    compute_type=compute_type,
                     progress=progress,
                     task_id=task
                 )
-            
+
             console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {meta_lang.upper()}).[/dim]")
 
             # Save Ghost to a TEMP FILE
@@ -227,6 +228,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                             nllb_target,
                             device=device,
                             model_id=translation_model,
+                            compute_type=compute_type,
                             progress=progress,
                             task_id=task
                         )

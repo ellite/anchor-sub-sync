@@ -99,8 +99,8 @@ def select_translation_model(memory_gb, is_gpu=True):
     """
     Selects the best NLLB translation model based on memory.
     """
-    # Note: 3.3B in float16 is ~7GB, 1.3B is ~2.6GB, 600M is ~1.2GB
-    NLLB_600M = "JustFrederik/nllb-200-distilled-600M-ct2-float16" 
+    # Note: 3.3B int8 is ~3.5GB, 1.3B float16 is ~2.6GB, 600M float16 is ~1.2GB
+    NLLB_600M = "JustFrederik/nllb-200-distilled-600M-ct2-float16"
     NLLB_1_3B = "JustFrederik/nllb-200-distilled-1.3B-ct2-float16"
     NLLB_3_3B = "JustFrederik/nllb-200-3.3B-ct2-float16"
 
@@ -108,15 +108,15 @@ def select_translation_model(memory_gb, is_gpu=True):
         # Stick to int8 for CPU usually, as float16 is slow on most CPUs
         return "JustFrederik/nllb-200-distilled-600M-ct2-int8"
 
-    # GPU Logic with updated VRAM thresholds for float16
+    # GPU Logic
     if memory_gb >= 12:
-        return NLLB_3_3B # Needs ~7GB + Whisper overhead
+        return NLLB_3_3B # Needs ~3.5GB + Whisper overhead
     elif memory_gb >= 6:
         return NLLB_1_3B 
     else:
         return NLLB_600M
 
-def get_compute_device(force_model=None, force_batch=None, force_translation_model=None):
+def get_compute_device(force_model=None, force_batch=None, force_translation_model=None, force_cpu=False):
     """
     Detects hardware and selects optimal settings + Whisper model + Translation model.
     """
@@ -125,9 +125,17 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
     batch_size = 4
     model_size = "base"
     translation_model = "JustFrederik/nllb-200-distilled-600M-ct2-int8" # Default safe fallback
-    
+
+    if force_cpu:
+        cpu_name = get_cpu_name()
+        ram_gb = get_system_ram_gb()
+        console.print(f"[bold blue]🖥️ CPU mode forced:[/bold blue] {cpu_name}")
+        console.print(f"[dim]   System RAM Available: {ram_gb:.1f} GB[/dim]")
+        model_size = select_model_size(ram_gb, is_gpu=False)
+        translation_model = select_translation_model(ram_gb, is_gpu=False)
+
     # Check for NVIDIA CUDA
-    if torch.cuda.is_available():
+    elif torch.cuda.is_available():
         if torch.version.hip:
             device_count = torch.cuda.device_count()
             min_mem_gb = 0
@@ -295,12 +303,14 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
 
         # Define the exact valid list (The Aliases + The Raw IDs)
         valid_map = aliases.copy()
-        
+
         # ...and add the raw strings from our valid list so they map to themselves
         raw_valid_models = [
             "JustFrederik/nllb-200-distilled-600M-ct2-float16",
             "JustFrederik/nllb-200-distilled-1.3B-ct2-float16",
-            "JustFrederik/nllb-200-3.3B-ct2-float16"
+            "Derur/nllb-200-3.3B-ct2-float16",
+            "OpenNMT/nllb-200-3.3B-ct2-int8",
+            "JustFrederik/nllb-200-3.3B-ct2-float16",
         ]
         
         for m in raw_valid_models:

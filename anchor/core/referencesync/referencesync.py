@@ -12,7 +12,7 @@ from ...utils.whisper import GlobalAligner
 
 SUPPORTED_EXTENSIONS = {".srt", ".ass", ".vtt", ".sub"}
 
-def run_referencesync(args, device, translation_model, console):
+def run_referencesync(args, device, translation_model, compute_type, console):
     """
     Main workflow for Reference-based Sync.
     Maps an out-of-sync target subtitle to a perfectly synced reference subtitle.
@@ -127,11 +127,12 @@ def run_referencesync(args, device, translation_model, console):
                 task = progress.add_task("Translating", total=None)
                 
                 ghost_sub = translate_subtitle_nllb(
-                    original_sub_object, 
-                    nllb_source, 
-                    nllb_target, 
-                    device=device, 
+                    original_sub_object,
+                    nllb_source,
+                    nllb_target,
+                    device=device,
                     model_id=translation_model,
+                    compute_type=compute_type,
                     progress=progress,
                     task_id=task
                 )

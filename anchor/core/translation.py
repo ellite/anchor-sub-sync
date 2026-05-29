@@ -16,7 +16,6 @@ disable_progress_bars()
 console = Console()
 
 # Use the distilled tokenizer as it is compatible with NLLB and lightweight
-TOKENIZER_ID = "facebook/nllb-200-distilled-600M"
 
 # ---------- General Helpers ----------
 
@@ -220,7 +219,7 @@ def _translate_ct2_batch(batch, tokenizer, translator, forced_bos, beam_size=4, 
         source_tokens,
         target_prefix=[[forced_bos]] * len(batch),
         beam_size=beam_size,
-        max_decoding_length=256,
+        max_decoding_length=128,
         repetition_penalty=repetition_penalty,
         no_repeat_ngram_size=no_repeat_ngram_size,
         length_penalty=length_penalty
@@ -236,11 +235,12 @@ def _translate_ct2_batch(batch, tokenizer, translator, forced_bos, beam_size=4, 
 # Main CLI Translation Function (For Subtitle Files)
 
 def translate_subtitle_nllb(
-    sub: pysubs2.SSAFile, 
-    source_code: str, 
-    target_code: str, 
-    device="cpu", 
+    sub: pysubs2.SSAFile,
+    source_code: str,
+    target_code: str,
+    device="cpu",
     model_id="JustFrederik/nllb-200-distilled-600M-ct2-float16",
+    compute_type="auto",
     progress: Progress = None,
     task_id: TaskID = None
 ) -> pysubs2.SSAFile:
@@ -280,12 +280,12 @@ def translate_subtitle_nllb(
             progress.update(task_id, description="Translating...", advance=0)
             
         translator = ctranslate2.Translator(
-            model_path, 
+            model_path,
             device=device,
-            compute_type="auto"
+            compute_type=compute_type
         )
         
-        tokenizer = transformers.AutoTokenizer.from_pretrained(TOKENIZER_ID)
+        tokenizer = transformers.AutoTokenizer.from_pretrained(model_id, legacy_behaviour=True)
         tokenizer.src_lang = source_code
         tokenizer.tgt_lang = target_code
         forced_bos = target_code 
@@ -357,7 +357,9 @@ def translate_subtitle_nllb(
                     progress.advance(duel_task_id, advance=len(batch))
             if progress and duel_task_id is not None:
                 progress.remove_task(duel_task_id)
-                
+
+            surgeon_task_id = progress.add_task("   [dim]Surgeon pass...[/dim]", total=len(fallback_indices)) if progress else None
+
             fixes_applied = 0
             for i, original_idx in enumerate(fallback_indices):
                 src = all_lines[original_idx]
@@ -392,12 +394,17 @@ def translate_subtitle_nllb(
 
                 # Find the candidate with the lowest suspicion score
                 best_tgt, best_score = min(candidates, key=lambda x: x[1])
-                
-                # If one of the fallbacks beat the original, apply it!
+
                 if best_tgt != old_tgt:
                     translated_lines[original_idx] = best_tgt
                     fixes_applied += 1
-            
+
+                if progress and surgeon_task_id is not None:
+                    progress.advance(surgeon_task_id, advance=1)
+
+            if progress and surgeon_task_id is not None:
+                progress.remove_task(surgeon_task_id)
+
             if progress and fixes_applied > 0:
                 progress.console.print(f"   [green]✨ Successfully repaired {fixes_applied} lines.[/green]")
 
@@ -448,9 +455,9 @@ def load_model(model_id: str, device: str = "cpu", compute_type: str = "auto") -
     Designed for the API watchdog so it doesn't constantly reload from disk.
     """
     model_path = snapshot_download(repo_id=model_id)
-    
+
     translator = ctranslate2.Translator(
-        model_path, 
+        model_path,
         device=device,
         compute_type=compute_type
     )
@@ -564,7 +571,9 @@ def translate_lines_nllb(
 
             # Find the candidate with the lowest suspicion score
             best_tgt, best_score = min(candidates, key=lambda x: x[1])
-            if best_tgt != old_tgt:
+            if best_score >= 60.0:
+                translated_lines[original_idx] = src
+            elif best_tgt != old_tgt:
                 translated_lines[original_idx] = best_tgt
 
     # 4. Deterministic Guardrail Fixes
