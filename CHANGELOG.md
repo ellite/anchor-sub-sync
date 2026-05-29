@@ -2,6 +2,17 @@
 
 
 
+## v1.15.1 (2026-05-29)
+
+### Fix
+
+* fix: gargabe translation text after transformers update ([`69a009f`](https://github.com/ellite/anchor-sub-sync/commit/69a009f1ffb1f72a0f808d47b1f82b1a100b012c))
+
+### Unknown
+
+* Update contributors link in README.md ([`948a982`](https://github.com/ellite/anchor-sub-sync/commit/948a98245d42058b8e1271d4a1d1a113c6967da3))
+
+
 ## v1.15.0 (2026-04-27)
 
 ### Feature
