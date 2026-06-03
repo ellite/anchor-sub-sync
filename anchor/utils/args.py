@@ -82,6 +82,13 @@ def parse_arguments():
         default=False
     )
     
+    parser.add_argument(
+        "--missing",
+        action="store_true",
+        help="Skip video files (or languages) that already have a matching subtitle on disk.",
+        default=False
+    )
+
     # Hardware
     parser.add_argument(
         "--cpu",

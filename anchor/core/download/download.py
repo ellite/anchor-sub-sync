@@ -157,13 +157,30 @@ def run_download(args, config: dict, console: Console):
     # --- The Main Download Loop ---
     for file in selected_files:
         console.print(f"\n[cyan]🔍 Processing:[/cyan] {file.name}")
-        
+
+        langs_for_file = target_langs_list
+        if getattr(args, 'missing', False):
+            langs_for_file = [
+                lang for lang in target_langs_list
+                if not any(
+                    f.suffix == '.srt' and f.name.lower().startswith(f"{file.stem.lower()}.{lang.lower()}")
+                    for f in file.parent.iterdir()
+                )
+            ]
+            if not langs_for_file:
+                console.print("   [dim]All requested subtitles already present. Skipping.[/dim]")
+                continue
+            skipped_langs = [l for l in target_langs_list if l not in langs_for_file]
+            if skipped_langs:
+                console.print(f"   [dim]Subtitle already present for: {', '.join(l.upper() for l in skipped_langs)}[/dim]")
+
+        file_langs_str = ",".join(langs_for_file)
         file_hash = hash_file(file)
         parsed_data = parse_video_filename(file)
-        
+
         results = []
-        with console.status(f"   [dim]Searching subtitles ({target_langs_str})...[/dim]", spinner="dots"):
-            for lang in target_langs_list:
+        with console.status(f"   [dim]Searching subtitles ({file_langs_str})...[/dim]", spinner="dots"):
+            for lang in langs_for_file:
                 if use_opensubtitles:
                     results += search_opensubtitles(parsed_data, file_hash, lang, os_api_key)
                 if use_subdl:
@@ -182,7 +199,7 @@ def run_download(args, config: dict, console: Console):
             
         # --- SCORING ENGINE ---
         for sub in results:
-            sub["score"] = calculate_score(parsed_data, sub, target_langs_list, prefer_sdh, prefer_forced)
+            sub["score"] = calculate_score(parsed_data, sub, langs_for_file, prefer_sdh, prefer_forced)
 
         results.sort(key=lambda x: x["score"], reverse=True)
         # ------------------------------
@@ -210,7 +227,7 @@ def run_download(args, config: dict, console: Console):
             
         elif download_mode == "auto":
             # Find the absolute best subtitle for EACH configured language
-            for lang in target_langs_list:
+            for lang in langs_for_file:
                 lang_code = lang.lower()
                 lang_results = [r for r in results if (r.get("language") or "").lower() == lang_code and r.get("score", -100) > 0]
                 
