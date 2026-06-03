@@ -2,6 +2,13 @@
 
 
 
+## v1.16.0 (2026-06-03)
+
+### Feature
+
+* feat: new --missing argument for unatended subtitle download ([`63edbcd`](https://github.com/ellite/anchor-sub-sync/commit/63edbcdbb993a4b1f8fdfe3cbe03f987db8d2f74))
+
+
 ## v1.15.2 (2026-05-29)
 
 ### Fix

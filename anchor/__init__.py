@@ -6,7 +6,7 @@ import sys
 # (PTY replacement) don't cause handler writes to a closed file descriptor.
 logging.basicConfig(stream=sys.__stderr__)
 
-__version__ = "1.15.2"
+__version__ = "1.16.0"
 
 # ================= TORCHAUDIO COMPAT SHIM =================
 # torchaudio 2.11+ removed AudioMetaData and torchaudio.info; pyannote 3.x needs both.
