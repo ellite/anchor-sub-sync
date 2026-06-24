@@ -2,6 +2,13 @@
 
 
 
+## v1.16.1 (2026-06-24)
+
+### Fix
+
+* fix: timeout for subdl ([`03c2305`](https://github.com/ellite/anchor-sub-sync/commit/03c23059f593a6adffe76ca7a9e7f91d6b569e83))
+
+
 ## v1.16.0 (2026-06-03)
 
 ### Feature
