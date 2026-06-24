@@ -1,4 +1,5 @@
 import re
+import time
 import requests
 import zipfile
 import io
@@ -86,6 +87,22 @@ def _normalize_lang_code(raw: str) -> str:
     return _LANG_NAME_TO_CODE.get(cleaned, cleaned[:2])
 
 
+_SUBDL_TIMEOUT = 20
+_SUBDL_RETRIES = 2
+_SUBDL_RETRY_DELAY = 3  # seconds between retries
+
+def _get_with_retry(url: str, headers: dict, params: dict) -> requests.Response:
+    """GET with automatic retry on timeout."""
+    for attempt in range(_SUBDL_RETRIES):
+        try:
+            return requests.get(url, headers=headers, params=params, timeout=_SUBDL_TIMEOUT)
+        except requests.exceptions.Timeout:
+            if attempt < _SUBDL_RETRIES - 1:
+                time.sleep(_SUBDL_RETRY_DELAY)
+            else:
+                raise
+
+
 def _build_params(parsed_data: dict, langs_upper: str, api_key: str) -> dict:
     """Builds the base query params shared between first and retry requests."""
     content_type = "tv" if parsed_data.get("season") else "movie"
@@ -163,12 +180,7 @@ def search_subdl(parsed_data: dict, language: str, api_key: str) -> list:
     all_raw_subs = []
 
     try:
-        response = requests.get(
-            SUBDL_SEARCH_URL,
-            headers=headers,
-            params=params,
-            timeout=10,
-        )
+        response = _get_with_retry(SUBDL_SEARCH_URL, headers=headers, params=params)
 
         if response.status_code == 200:
             data = response.json()
@@ -190,12 +202,7 @@ def search_subdl(parsed_data: dict, language: str, api_key: str) -> list:
                         retry_params["language"] = lang_upper
 
                         try:
-                            response2 = requests.get(
-                                SUBDL_SEARCH_URL,
-                                headers=headers,
-                                params=retry_params,
-                                timeout=10,
-                            )
+                            response2 = _get_with_retry(SUBDL_SEARCH_URL, headers=headers, params=retry_params)
 
                             if response2.status_code == 200:
                                 data2 = response2.json()
