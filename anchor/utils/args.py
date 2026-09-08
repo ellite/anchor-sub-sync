@@ -96,6 +96,12 @@ def parse_arguments():
         help="Force CPU execution, bypassing GPU detection.",
         default=False
     )
+    parser.add_argument(
+        "--check-hardware",
+        action="store_true",
+        help="Re-run hardware detection, refresh the cached profile in the config, then continue.",
+        default=False
+    )
 
     # API Mode
     parser.add_argument("--api",

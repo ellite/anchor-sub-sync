@@ -120,9 +120,22 @@ def _cpu_compute_type():
     """Returns int8_float32 on ARM64 (faster NEON accumulators), int8 everywhere else."""
     return "int8_float32" if platform.machine() in ("arm64", "aarch64") else "int8"
 
-def get_compute_device(force_model=None, force_batch=None, force_translation_model=None, force_cpu=False):
+HARDWARE_CACHE_KEYS = ("device", "compute_type", "batch_size", "model_size", "translation_model", "cpu_threads")
+
+
+def hardware_signature():
+    """Cheap host fingerprint used to spot a stale cached hardware profile.
+
+    Only covers what we can read without initializing torch/CUDA, so a new GPU or a
+    driver/torch reinstall won't change it - those need an explicit --check-hardware.
+    """
+    return f"{platform.system()}-{platform.machine()}-{os.cpu_count()}"
+
+
+def detect_hardware(force_cpu=False):
     """
     Detects hardware and selects optimal settings + Whisper model + Translation model.
+    Returns the raw detected profile, before any user overrides are applied.
     """
     device = "cpu"
     compute_type = _cpu_compute_type()
@@ -264,7 +277,13 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
         model_size = select_model_size(ram_gb, is_gpu=False)
         translation_model = select_translation_model(ram_gb, is_gpu=False)
 
-    # User Overrides
+    return device, compute_type, batch_size, model_size, translation_model, cpu_threads
+
+
+def apply_overrides(detected, force_model=None, force_batch=None, force_translation_model=None):
+    """Applies user / CLI overrides on top of a detected (or cached) hardware profile."""
+    device, compute_type, batch_size, model_size, translation_model, cpu_threads = detected
+
     # Model override
     if force_model:
         valid_models = [
@@ -333,3 +352,13 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
         translation_model = valid_map[clean_input]
 
     return device, compute_type, batch_size, model_size, translation_model, cpu_threads
+
+
+def get_compute_device(force_model=None, force_batch=None, force_translation_model=None, force_cpu=False):
+    """Backwards-compatible one-shot: detect hardware and apply overrides."""
+    return apply_overrides(
+        detect_hardware(force_cpu=force_cpu),
+        force_model=force_model,
+        force_batch=force_batch,
+        force_translation_model=force_translation_model,
+    )

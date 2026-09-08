@@ -1,13 +1,14 @@
 import sys
+from datetime import date
 
 from . import pytorch_compat
 pytorch_compat.apply_patches()
 
 from rich.console import Console
-from .hardware import get_compute_device
+from .hardware import detect_hardware, apply_overrides, hardware_signature, HARDWARE_CACHE_KEYS
 from .utils.args import parse_arguments
 from .utils.selections import select_container_mode, select_run_mode, select_pointsync_mode
-from .utils.config import load_config
+from .utils.config import load_config, save_config
 from .api.api import run_apimode
 from .core.audiosync.audiosync import run_audiosync
 from .core.pointsync.pointsync import run_pointsync
@@ -40,7 +41,37 @@ def main():
         final_translation_model = args.translation_model or hw_overrides.get("translation_model")
 
         # Hardware Check
-        device, compute_type, batch_size, model_size, translation_model, cpu_threads = get_compute_device(force_model=final_audio_model, force_batch=final_batch_size, force_translation_model=final_translation_model, force_cpu=args.cpu)
+        # The detection step (esp. CUDA init) is slow, so the raw profile is cached in the
+        # config and reused while the host fingerprint matches. --check-hardware forces a
+        # refresh; --cpu always detects fresh and is never cached (it's a one-off profile).
+        hw_cache = config.get("hardware", {})
+        signature = hardware_signature()
+        cache_valid = (
+            not args.check_hardware
+            and not args.cpu
+            and hw_cache.get("signature") == signature
+            and all(k in hw_cache for k in HARDWARE_CACHE_KEYS)
+        )
+
+        if cache_valid:
+            detected = tuple(hw_cache[k] for k in HARDWARE_CACHE_KEYS)
+            console.print("[dim]Loaded cached hardware profile (run with --check-hardware to refresh).[/dim]")
+        else:
+            detected = detect_hardware(force_cpu=args.cpu)
+            if not args.cpu:
+                config["hardware"] = {
+                    "signature": signature,
+                    **dict(zip(HARDWARE_CACHE_KEYS, detected)),
+                    "last_checked": date.today().isoformat(),
+                }
+                save_config(config)
+
+        device, compute_type, batch_size, model_size, translation_model, cpu_threads = apply_overrides(
+            detected,
+            force_model=final_audio_model,
+            force_batch=final_batch_size,
+            force_translation_model=final_translation_model,
+        )
         console.print(f"[dim]Engine configured for: [bold white]{device}[/bold white] (model: {model_size}, precision: {compute_type}, batch size: {batch_size}, translation model: {translation_model})[/dim]\n")
 
         # Check if it should run in unattended mode
