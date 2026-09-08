@@ -45,6 +45,23 @@ def _cached_device(config):
     return config.get("hardware", {}).get("device") or "cpu"
 
 
+def _print_hardware_summary(config):
+    """One-line reminder of the cached hardware profile (no torch import)."""
+    hw = config.get("hardware", {})
+    if not hw:
+        console.print(
+            "[dim]Hardware: not profiled yet — detected on the first sync/transcribe/translate "
+            "run, or now with [white]--check-hardware[/white].[/dim]\n"
+        )
+        return
+    label = hw.get("label") or hw.get("device", "unknown")
+    console.print(
+        f"[dim]Hardware: [white]{label}[/white]  ·  {hw.get('model_size')} / {hw.get('compute_type')} / "
+        f"batch {hw.get('batch_size')}  ·  cached {hw.get('last_checked', '?')} "
+        f"([white]--check-hardware[/white] to refresh)[/dim]\n"
+    )
+
+
 def _detect_and_cache(args, config):
     """Runs hardware detection and (unless --cpu) persists it to the config cache. Imports torch."""
     from .hardware import HARDWARE_CACHE_KEYS, detect_hardware, hardware_signature
@@ -72,30 +89,21 @@ def _resolve_engine(args, config):
     )
 
     # Detection (esp. CUDA init) is slow, so the raw profile is cached in the config and
-    # reused while the host fingerprint matches. --check-hardware forces a refresh; --cpu
-    # always detects fresh and is never cached (it's a one-off profile).
+    # reused while the host fingerprint matches. A --check-hardware refresh already ran in
+    # main() by this point; --cpu always detects fresh and is never cached (one-off profile).
     hw_cache = config.get("hardware", {})
     cache_valid = (
-        not args.check_hardware
-        and not args.cpu
+        not args.cpu
         and hw_cache.get("signature") == hardware_signature()
         and all(k in hw_cache for k in HARDWARE_CACHE_KEYS)
     )
 
-    if cache_valid:
-        detected = tuple(hw_cache[k] for k in HARDWARE_CACHE_KEYS)
-        console.print("[dim]Loaded cached hardware profile (run with --check-hardware to refresh).[/dim]")
-    else:
-        detected = _detect_and_cache(args, config)
-
+    detected = tuple(hw_cache[k] for k in HARDWARE_CACHE_KEYS) if cache_valid else _detect_and_cache(args, config)
     return apply_overrides(detected, **forces)
 
 
 def _run_light_task(task, args, config):
     """Dispatch for tasks that don't need the ML engine."""
-    if args.check_hardware:
-        _detect_and_cache(args, config)
-
     if task == "download":
         from .core.download.download import run_download
         run_download(args, config, console)
@@ -118,7 +126,7 @@ def _run_heavy_task(task, args, config):
     from . import pytorch_compat
     pytorch_compat.apply_patches()
 
-    device, compute_type, batch_size, model_size, translation_model, cpu_threads = _resolve_engine(args, config)
+    device, compute_type, batch_size, model_size, translation_model, cpu_threads, _label = _resolve_engine(args, config)
     console.print(
         f"[dim]Engine configured for: [bold white]{device}[/bold white] "
         f"(model: {model_size}, precision: {compute_type}, batch size: {batch_size}, "
@@ -153,6 +161,13 @@ def main():
         console.print(f"[bold blue]⚓ Anchor Subtitle Sync {__version__}[/bold blue]\n")
 
         config = load_config()
+
+        # Explicit refresh request: re-detect now so the user sees the result immediately.
+        if args.check_hardware:
+            console.print("[bold]Re-checking hardware…[/bold]")
+            _detect_and_cache(args, config)
+
+        _print_hardware_summary(config)
 
         # Unattended tasks come from args; interactive mode asks (before any ML import).
         task = _resolve_task(args) or select_run_mode()

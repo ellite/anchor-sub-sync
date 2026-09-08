@@ -120,7 +120,7 @@ def _cpu_compute_type():
     """Returns int8_float32 on ARM64 (faster NEON accumulators), int8 everywhere else."""
     return "int8_float32" if platform.machine() in ("arm64", "aarch64") else "int8"
 
-HARDWARE_CACHE_KEYS = ("device", "compute_type", "batch_size", "model_size", "translation_model", "cpu_threads")
+HARDWARE_CACHE_KEYS = ("device", "compute_type", "batch_size", "model_size", "translation_model", "cpu_threads", "label")
 
 
 def hardware_signature():
@@ -143,6 +143,7 @@ def detect_hardware(force_cpu=False):
     model_size = "base"
     translation_model = "JustFrederik/nllb-200-distilled-600M-ct2-int8" # Default safe fallback
     cpu_threads = os.cpu_count() or 4
+    label = "CPU"
 
     if force_cpu:
         cpu_name = get_cpu_name()
@@ -151,6 +152,7 @@ def detect_hardware(force_cpu=False):
         console.print(f"[dim]   System RAM Available: {ram_gb:.1f} GB[/dim]")
         model_size = select_model_size(ram_gb, is_gpu=False)
         translation_model = select_translation_model(ram_gb, is_gpu=False)
+        label = f"CPU ({cpu_name}, forced)"
 
     # Check for NVIDIA CUDA
     elif torch.cuda.is_available():
@@ -160,18 +162,22 @@ def detect_hardware(force_cpu=False):
 
             try:
                 mems = []
+                names = []
                 for i in range(device_count):
                     name = torch.cuda.get_device_name(i)
                     props = torch.cuda.get_device_properties(i)
                     gb = props.total_memory / (1024 ** 3)
                     mems.append(gb)
+                    names.append(name)
                     console.print(f"[bold red]🛑 Hardware Detected:[/bold red] {name} (ROCm, {math.ceil(gb)} GB)")
 
                 if mems:
                     min_mem_gb = min(mems)
+                label = f"{', '.join(names)} (ROCm, {math.ceil(min_mem_gb)} GB)"
             except Exception:
                 console.print("[bold red]🛑 Hardware Detected:[/bold red] AMD GPU (ROCm, Unknown VRAM, assuming 8 GB)")
                 min_mem_gb = 8
+                label = "AMD GPU (ROCm, unknown VRAM)"
 
             # Probe whether this ctranslate2 build actually supports ROCm
             rocm_ct2_supported = False
@@ -207,24 +213,29 @@ def detect_hardware(force_cpu=False):
                 ram_gb = get_system_ram_gb()
                 model_size = select_model_size(ram_gb, is_gpu=False)
                 translation_model = select_translation_model(ram_gb, is_gpu=False)
+                label = f"CPU ({get_cpu_name()}, ROCm unavailable)"
         else:
             device_count = torch.cuda.device_count()
             min_mem_gb = 0
             
             try:
                 mems = []
+                names = []
                 for i in range(device_count):
                     name = torch.cuda.get_device_name(i)
                     props = torch.cuda.get_device_properties(i)
                     gb = props.total_memory / (1024 ** 3)
                     mems.append(gb)
+                    names.append(name)
                     console.print(f"[bold green]🚀 Hardware Detected:[/bold green] {name} ({math.ceil(gb)} GB)")
-                
+
                 if mems:
                     min_mem_gb = min(mems)
+                label = f"{', '.join(names)} ({math.ceil(min_mem_gb)} GB)"
             except Exception:
                 console.print("[bold green]🚀 Hardware Detected:[/bold green] NVIDIA GPU (Unknown VRAM)")
-                min_mem_gb = 4 
+                min_mem_gb = 4
+                label = "NVIDIA GPU (unknown VRAM)"
 
             device = "cuda"
             compute_type = "float16"
@@ -253,9 +264,10 @@ def detect_hardware(force_cpu=False):
         cpu_name = get_cpu_name()
         console.print(f"[bold cyan]🍎 Hardware Detected:[/bold cyan] Apple Silicon (Running on CPU {cpu_name})")
         console.print(f"[dim]   System RAM Available: {sys_ram:.1f} GB[/dim]")
-        
+
         model_size = select_model_size(sys_ram, is_gpu=False)
         translation_model = select_translation_model(sys_ram, is_gpu=False)
+        label = f"Apple Silicon → CPU ({cpu_name})"
 
     # Check for Intel Arc / iGPU
     elif hasattr(torch, 'xpu') and torch.xpu.is_available():
@@ -265,6 +277,7 @@ def detect_hardware(force_cpu=False):
          console.print("[bold blue]🔵 Hardware Detected:[/bold blue] Intel Arc/XPU")
          model_size = "medium"
          translation_model = select_translation_model(8, is_gpu=True) # Assume mid-range
+         label = "Intel Arc / XPU"
 
     # CPU Fallback
     else:
@@ -276,13 +289,14 @@ def detect_hardware(force_cpu=False):
 
         model_size = select_model_size(ram_gb, is_gpu=False)
         translation_model = select_translation_model(ram_gb, is_gpu=False)
+        label = f"CPU ({cpu_name})"
 
-    return device, compute_type, batch_size, model_size, translation_model, cpu_threads
+    return device, compute_type, batch_size, model_size, translation_model, cpu_threads, label
 
 
 def apply_overrides(detected, force_model=None, force_batch=None, force_translation_model=None):
     """Applies user / CLI overrides on top of a detected (or cached) hardware profile."""
-    device, compute_type, batch_size, model_size, translation_model, cpu_threads = detected
+    device, compute_type, batch_size, model_size, translation_model, cpu_threads, label = detected
 
     # Model override
     if force_model:
@@ -351,7 +365,7 @@ def apply_overrides(detected, force_model=None, force_batch=None, force_translat
             
         translation_model = valid_map[clean_input]
 
-    return device, compute_type, batch_size, model_size, translation_model, cpu_threads
+    return device, compute_type, batch_size, model_size, translation_model, cpu_threads, label
 
 
 def get_compute_device(force_model=None, force_batch=None, force_translation_model=None, force_cpu=False):
