@@ -2,6 +2,29 @@
 
 
 
+## v1.17.0 (2026-09-08)
+
+### Feature
+
+* feat: show hardware profile at startup and give --check-hardware visible feedback ([`2f72d7f`](https://github.com/ellite/anchor-sub-sync/commit/2f72d7fd1b46eda3a7ce98d32063b65d398e2d81))
+
+* feat: lazy-load torch so non-ML commands start instantly ([`6ab49d8`](https://github.com/ellite/anchor-sub-sync/commit/6ab49d8f14f3c5d5774a835d0a0ce33286ef51ce))
+
+* feat: cache hardware detection in config, add --check-hardware to refresh ([`9f04859`](https://github.com/ellite/anchor-sub-sync/commit/9f04859c0691e815c2952620ee82760242bd01f8))
+
+* feat: pass CPU thread count through to NLLB translation ([`96c87fd`](https://github.com/ellite/anchor-sub-sync/commit/96c87fd35d864c7933c374df56be001954adf692))
+
+* feat: show real-time progress during transcription ([`a725696`](https://github.com/ellite/anchor-sub-sync/commit/a72569607b83bc91064bd698f9efd5631d28c0c0))
+
+* feat: use all CPU threads and ARM-optimized compute type for transcription ([`72fb14b`](https://github.com/ellite/anchor-sub-sync/commit/72fb14ba8bebfd5fbd8aa32e24c307764ab20188))
+
+### Fix
+
+* fix: relax ctranslate2 constraint to &gt;=4.4.0 ([`cab4c16`](https://github.com/ellite/anchor-sub-sync/commit/cab4c16680c5b95d473f36d72e4d70e75bb3f913))
+
+* fix: align Translate icon in task selection menu ([`79eaaf5`](https://github.com/ellite/anchor-sub-sync/commit/79eaaf5b8f86373376460860eeb890e7bb5427d7))
+
+
 ## v1.16.1 (2026-06-24)
 
 ### Fix

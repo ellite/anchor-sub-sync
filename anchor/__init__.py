@@ -6,7 +6,7 @@ import sys
 # (PTY replacement) don't cause handler writes to a closed file descriptor.
 logging.basicConfig(stream=sys.__stderr__)
 
-__version__ = "1.16.1"
+__version__ = "1.17.0"
 
 # NOTE: torch / torchaudio runtime patches live in pytorch_compat.apply_patches().
 # They are NOT applied here so that light commands (download, convert, container,
