@@ -7,10 +7,13 @@ import pysubs2
 from PIL import Image
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 
-try:
-    import easyocr
-except ImportError:
-    easyocr = None
+def _load_easyocr():
+    """Imported lazily - easyocr pulls in torch (~1s), only needed for OCR conversion."""
+    try:
+        import easyocr
+        return easyocr
+    except ImportError:
+        return None
 
 def is_image_blank(img_path: Path):
     """Instantly checks if an image is completely transparent."""
@@ -197,6 +200,7 @@ def extract_subtitle_images(file_path: Path, temp_dir: str, console):
 
 def run_ocr_engine(file_path: Path, target_ext: str, console, device: str):
     """Handles extracting images from binary subtitle formats and running OCR."""
+    easyocr = _load_easyocr()
     if easyocr is None:
         console.print("\n[bold red]❌ EasyOCR is not installed![/bold red]")
         return
