@@ -15,7 +15,7 @@ dependencies = [
     "whisperx",
     "pysubs2",
     "py-cpuinfo",
-    "ctranslate2>=4.6.0",
+    "ctranslate2>=4.4.0",
     "langdetect",
     "transformers",
     "huggingface_hub",
