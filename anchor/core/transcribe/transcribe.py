@@ -918,8 +918,9 @@ def run_transcription(args, device, model_size, compute_type, console: Console, 
 
         try:
             # --- TRANSCRIBE ---
+            duration = get_duration(input_path)
             with get_progress(console) as p:
-                p.add_task("Step 1/5: Transcribing...", total=None)
+                task = p.add_task("Step 1/5: Transcribing...", total=duration if duration > 0 else None)
 
                 model = WhisperModel(model_size, device=device, compute_type=compute_type, cpu_threads=cpu_threads)
                 segs, info = model.transcribe(
@@ -936,6 +937,7 @@ def run_transcription(args, device, model_size, compute_type, console: Console, 
                         "avg_logprob": getattr(s, "avg_logprob", None),
                         "_orig_id": i
                     })
+                    p.update(task, completed=s.end)
 
                 # Drop likely hallucinations / music
                 filtered = []
