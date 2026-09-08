@@ -606,7 +606,7 @@ def zone_quality_score(segs):
     return score
 
 
-def repair_zone_best(model, device, compute_type, audio_path, zone_segments, repair_padding, language):
+def repair_zone_best(model, device, compute_type, audio_path, zone_segments, repair_padding, language, cpu_threads=0):
     core_start = float(zone_segments[0]["start"])
     core_end = float(zone_segments[-1]["end"])
     start = max(0.0, core_start - repair_padding)
@@ -628,7 +628,7 @@ def repair_zone_best(model, device, compute_type, audio_path, zone_segments, rep
         # Re-using the model instance is faster than reloading it, 
         # but clear internal state if possible. 
         # It uses 'transcribe' which resets state, passing 'm' is fine.
-        m = WhisperModel(model, device=device, compute_type=compute_type)
+        m = WhisperModel(model, device=device, compute_type=compute_type, cpu_threads=cpu_threads)
         
         for i, cfg in enumerate(attempts):
             try:
@@ -868,7 +868,7 @@ def get_progress(console):
         transient=True
     )
 
-def run_transcription(args, device, model_size, compute_type, console: Console):
+def run_transcription(args, device, model_size, compute_type, console: Console, cpu_threads=0):
     console.print("\n[bold green]📝  Video/Audio Transcription[/bold green]")
     
     # Support multiple selected files: build list of input paths
@@ -920,10 +920,10 @@ def run_transcription(args, device, model_size, compute_type, console: Console):
             # --- TRANSCRIBE ---
             with get_progress(console) as p:
                 p.add_task("Step 1/5: Transcribing...", total=None)
-                
-                model = WhisperModel(model_size, device=device, compute_type=compute_type)
+
+                model = WhisperModel(model_size, device=device, compute_type=compute_type, cpu_threads=cpu_threads)
                 segs, info = model.transcribe(
-                    str(input_path), beam_size=5, vad_filter=False, 
+                    str(input_path), beam_size=5, vad_filter=False,
                     condition_on_previous_text=False, language=detected_lang
                 )
                 raw_segments = []
@@ -984,7 +984,7 @@ def run_transcription(args, device, model_size, compute_type, console: Console):
                         orig_score = zone_quality_score(original_clean)
                         
                         repaired_block = repair_zone_best(
-                            model_size, device, compute_type, input_path, bad_slice, REPAIR_PADDING_PASS_1, actual_lang
+                            model_size, device, compute_type, input_path, bad_slice, REPAIR_PADDING_PASS_1, actual_lang, cpu_threads
                         )
                         rep_score = zone_quality_score(repaired_block)
 
@@ -1033,7 +1033,7 @@ def run_transcription(args, device, model_size, compute_type, console: Console):
                         orig_score = zone_quality_score(original_clean)
                         
                         repaired_block = repair_zone_best(
-                            model_size, device, compute_type, input_path, bad_slice, REPAIR_PADDING_PASS_2, actual_lang
+                            model_size, device, compute_type, input_path, bad_slice, REPAIR_PADDING_PASS_2, actual_lang, cpu_threads
                         )
                         rep_score = zone_quality_score(repaired_block)
 

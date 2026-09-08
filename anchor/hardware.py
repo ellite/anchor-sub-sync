@@ -116,15 +116,20 @@ def select_translation_model(memory_gb, is_gpu=True):
     else:
         return NLLB_600M
 
+def _cpu_compute_type():
+    """Returns int8_float32 on ARM64 (faster NEON accumulators), int8 everywhere else."""
+    return "int8_float32" if platform.machine() in ("arm64", "aarch64") else "int8"
+
 def get_compute_device(force_model=None, force_batch=None, force_translation_model=None, force_cpu=False):
     """
     Detects hardware and selects optimal settings + Whisper model + Translation model.
     """
     device = "cpu"
-    compute_type = "int8"
+    compute_type = _cpu_compute_type()
     batch_size = 4
     model_size = "base"
     translation_model = "JustFrederik/nllb-200-distilled-600M-ct2-int8" # Default safe fallback
+    cpu_threads = os.cpu_count() or 4
 
     if force_cpu:
         cpu_name = get_cpu_name()
@@ -183,10 +188,10 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
                 console.print("[yellow]⚠️ CTranslate2 has no ROCm support in this install. Falling back to CPU.[/yellow]")
                 console.print("[dim]   To enable AMD GPU acceleration, see: https://rocm.blogs.amd.com/artificial-intelligence/ctranslate2/README.html[/dim]")
                 device = "cpu"
-                compute_type = "int8"
+                compute_type = _cpu_compute_type()
                 batch_size = 4
                 # USE SYSTEM RAM FOR CPU SELECTION INSTEAD OF GPU VRAM
-                ram_gb = get_system_ram_gb() 
+                ram_gb = get_system_ram_gb()
                 model_size = select_model_size(ram_gb, is_gpu=False)
                 translation_model = select_translation_model(ram_gb, is_gpu=False)
         else:
@@ -229,7 +234,7 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
         # NOTE: CTranslate2 (backend of faster-whisper/NLLB) does NOT support 'mps' device yet.
         # Must fall back to CPU.
         device = "cpu"
-        compute_type = "int8"
+        compute_type = _cpu_compute_type()
         batch_size = 8
         sys_ram = get_system_ram_gb()
         cpu_name = get_cpu_name()
@@ -327,4 +332,4 @@ def get_compute_device(force_model=None, force_batch=None, force_translation_mod
             
         translation_model = valid_map[clean_input]
 
-    return device, compute_type, batch_size, model_size, translation_model
+    return device, compute_type, batch_size, model_size, translation_model, cpu_threads

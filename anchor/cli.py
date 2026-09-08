@@ -40,7 +40,7 @@ def main():
         final_translation_model = args.translation_model or hw_overrides.get("translation_model")
 
         # Hardware Check
-        device, compute_type, batch_size, model_size, translation_model = get_compute_device(force_model=final_audio_model, force_batch=final_batch_size, force_translation_model=final_translation_model, force_cpu=args.cpu)
+        device, compute_type, batch_size, model_size, translation_model, cpu_threads = get_compute_device(force_model=final_audio_model, force_batch=final_batch_size, force_translation_model=final_translation_model, force_cpu=args.cpu)
         console.print(f"[dim]Engine configured for: [bold white]{device}[/bold white] (model: {model_size}, precision: {compute_type}, batch size: {batch_size}, translation model: {translation_model})[/dim]\n")
 
         # Check if it should run in unattended mode
@@ -64,7 +64,7 @@ def main():
             run_download(args, config, console)        
         elif args.video:
             # If only -v / --video is provided, it will run transcription in unattended mode
-            run_transcription(args, device, model_size, compute_type, console)
+            run_transcription(args, device, model_size, compute_type, console, cpu_threads)
 
         else:
             # Interactive mode
@@ -79,7 +79,7 @@ def main():
             elif (mode == "translate"):
                 run_translation(args, device, translation_model, compute_type, console)
             elif (mode == "transcribe"):
-                run_transcription(args, device, model_size, compute_type, console)
+                run_transcription(args, device, model_size, compute_type, console, cpu_threads)
             elif (mode == "container"):
                 container_mode = select_container_mode()
                 run_container_tasks(args, container_mode, console)
