@@ -99,13 +99,15 @@ async def translate_endpoint(req: TranslateRequest, raw_request: Request):
                 model_name = state.config.get('translation_model', 'Unknown Model')
                 device = state.config.get('device', 'cuda')
                 compute_type = state.config.get('compute_type', 'int8')
-                
+                cpu_threads = state.config.get('cpu_threads', 0)
+
                 print(f"\n⚡ Waking up model: {model_name}...")
-                
+
                 state.tokenizer, state.translator = load_model(
-                    model_id=model_name, 
-                    device=device, 
-                    compute_type=compute_type
+                    model_id=model_name,
+                    device=device,
+                    compute_type=compute_type,
+                    cpu_threads=cpu_threads
                 )
                 print("✅ Model loaded into VRAM!")
 
@@ -133,7 +135,7 @@ async def translate_endpoint(req: TranslateRequest, raw_request: Request):
     return response_data
 
 # THE LAUNCHER
-def run_apimode(args, device, model_size, compute_type, batch_size, translation_model, console, config):
+def run_apimode(args, device, model_size, compute_type, batch_size, translation_model, console, config, cpu_threads=0):
     host = config['api_server']['host']
     port = config['api_server']['port']
     timeout = config['api_server']['idle_timeout_seconds']
@@ -147,6 +149,7 @@ def run_apimode(args, device, model_size, compute_type, batch_size, translation_
         "compute_type": compute_type,
         "batch_size": batch_size,
         "translation_model": translation_model,
+        "cpu_threads": cpu_threads,
         "idle_timeout_seconds": timeout
     }
     

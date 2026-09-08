@@ -9,7 +9,7 @@ from ...utils.files import open_subtitle, backup_if_needed
 
 console = Console()
 
-def run_auto_linear_sync(target_file, reference_file, device="cpu", model_id="JustFrederik/nllb-200-distilled-600M-ct2-int8", console=console, args=None):
+def run_auto_linear_sync(target_file, reference_file, device="cpu", model_id="JustFrederik/nllb-200-distilled-600M-ct2-int8", console=console, args=None, cpu_threads=0):
     """
     Automatically finds start/end matches and applies linear correction.
     """
@@ -51,8 +51,9 @@ def run_auto_linear_sync(target_file, reference_file, device="cpu", model_id="Ju
                     device=device,
                     model_id=model_id,
                     progress=progress,
-                    task_id=task
-                ) 
+                    task_id=task,
+                    cpu_threads=cpu_threads
+                )
 
         console.print(f"[dim]🔄 Translation complete ({lang_target.upper()} -> {lang_ref.upper()})[/dim]")
 

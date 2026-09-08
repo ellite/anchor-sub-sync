@@ -242,7 +242,8 @@ def translate_subtitle_nllb(
     model_id="JustFrederik/nllb-200-distilled-600M-ct2-float16",
     compute_type="auto",
     progress: Progress = None,
-    task_id: TaskID = None
+    task_id: TaskID = None,
+    cpu_threads: int = 0
 ) -> pysubs2.SSAFile:
     
     metas = [] 
@@ -282,9 +283,10 @@ def translate_subtitle_nllb(
         translator = ctranslate2.Translator(
             model_path,
             device=device,
-            compute_type=compute_type
+            compute_type=compute_type,
+            intra_threads=cpu_threads
         )
-        
+
         try:
             tokenizer = transformers.AutoTokenizer.from_pretrained(model_id, legacy_behaviour=True)
         except TypeError:
@@ -452,7 +454,7 @@ def translate_subtitle_nllb(
 
 # API Functions (For Raw Text Arrays)
 
-def load_model(model_id: str, device: str = "cpu", compute_type: str = "auto") -> Tuple[transformers.PreTrainedTokenizer, ctranslate2.Translator]:
+def load_model(model_id: str, device: str = "cpu", compute_type: str = "auto", cpu_threads: int = 0) -> Tuple[transformers.PreTrainedTokenizer, ctranslate2.Translator]:
     """
     Loads the NLLB tokenizer and CTranslate2 model into VRAM persistently.
     Designed for the API watchdog so it doesn't constantly reload from disk.
@@ -462,7 +464,8 @@ def load_model(model_id: str, device: str = "cpu", compute_type: str = "auto") -
     translator = ctranslate2.Translator(
         model_path,
         device=device,
-        compute_type=compute_type
+        compute_type=compute_type,
+        intra_threads=cpu_threads
     )
     
     try:

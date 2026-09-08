@@ -14,7 +14,7 @@ from ..translation import translate_subtitle_nllb
 # Constants
 SUPPORTED_EXTENSIONS = {".srt", ".ass", ".vtt", ".sub"}
 
-def run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console):
+def run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console, cpu_threads=0):
     """
     Main workflow for the Audio-based Sync (Whisper).
     """
@@ -155,7 +155,8 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                     model_id=translation_model,
                     compute_type=compute_type,
                     progress=progress,
-                    task_id=task
+                    task_id=task,
+                    cpu_threads=cpu_threads
                 )
 
             console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {meta_lang.upper()}).[/dim]")
@@ -230,7 +231,8 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                             model_id=translation_model,
                             compute_type=compute_type,
                             progress=progress,
-                            task_id=task
+                            task_id=task,
+                            cpu_threads=cpu_threads
                         )
 
                     console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {detected_lang.upper()}).[/dim]")

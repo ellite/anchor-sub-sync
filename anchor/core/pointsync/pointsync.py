@@ -8,7 +8,7 @@ SUPPORTED_EXTENSIONS = {".srt", ".ass", ".vtt", ".sub"}
 
 console = Console()
 
-def run_pointsync(args, mode, device="cpu", translation_model="JustFrederik/nllb-200-distilled-600M-ct2-int8", console=Console()):
+def run_pointsync(args, mode, device="cpu", translation_model="JustFrederik/nllb-200-distilled-600M-ct2-int8", console=Console(), cpu_threads=0):
     """
     Main workflow for Point Sync (Manual or Auto-Linear).
     Args:
@@ -25,7 +25,7 @@ def run_pointsync(args, mode, device="cpu", translation_model="JustFrederik/nllb
         console.print(f"   ⏱️ Reference:       [green]{reference_file}[/green]\n")
 
 
-        run_auto_linear_sync(target_file, reference_file, device, translation_model, console, args)
+        run_auto_linear_sync(target_file, reference_file, device, translation_model, console, args, cpu_threads)
         
         return
 
@@ -86,4 +86,4 @@ def run_pointsync(args, mode, device="cpu", translation_model="JustFrederik/nllb
         
     elif mode == "auto":
         # Launch the Auto Linear Sync flow
-        run_auto_linear_sync(target_file, reference_file, device, translation_model, console, args)
+        run_auto_linear_sync(target_file, reference_file, device, translation_model, console, args, cpu_threads)

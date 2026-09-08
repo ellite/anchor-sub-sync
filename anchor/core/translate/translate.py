@@ -10,7 +10,7 @@ from ..translation import translate_subtitle_nllb
 
 SUPPORTED_EXTENSIONS = {".srt", ".ass", ".vtt", ".sub"}
 
-def run_translation(args, device, translation_model, compute_type, console: Console):
+def run_translation(args, device, translation_model, compute_type, console: Console, cpu_threads=0):
     if args.subtitle and args.language:
          """
         Unattended workflow for translating subtitles.
@@ -95,7 +95,8 @@ def run_translation(args, device, translation_model, compute_type, console: Cons
                     model_id=translation_model,
                     compute_type=compute_type,
                     progress=progress,
-                    task_id=task
+                    task_id=task,
+                    cpu_threads=cpu_threads
                 )
                 
             duration = time.time() - start_time

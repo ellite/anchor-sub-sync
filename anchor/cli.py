@@ -46,20 +46,20 @@ def main():
         # Check if it should run in unattended mode
         # If -s / --subtitle is porvided, it will run in unattended mode.
         if args.api:
-            run_apimode(args, device, model_size, compute_type, batch_size, translation_model, console, config)           
+            run_apimode(args, device, model_size, compute_type, batch_size, translation_model, console, config, cpu_threads)
         elif args.subtitle:
             # If -v / --video is provided together with -s, it's a audio sync
             if args.video:
-                run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console)
+                run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console, cpu_threads)
             # If -r / --reference is provided together with -s, it's a reference sync    
             elif args.reference:
-                run_referencesync(args, device, translation_model, compute_type, console)
+                run_referencesync(args, device, translation_model, compute_type, console, cpu_threads)
             # if -l / --language is provided together with -s, it's a translation 
             elif args.language:
-                run_translation(args, device, translation_model, compute_type, console)
+                run_translation(args, device, translation_model, compute_type, console, cpu_threads)
             # If only -s is provided, it will run unattended mode and try to auto-match the video file
             else:
-                run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console)
+                run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console, cpu_threads)
         elif args.download:
             run_download(args, config, console)        
         elif args.video:
@@ -70,14 +70,14 @@ def main():
             # Interactive mode
             mode = select_run_mode()
             if (mode == "audio"):
-                run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console)
+                run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console, cpu_threads)
             elif (mode == "reference"):
-                run_referencesync(args, device, translation_model, compute_type, console)
+                run_referencesync(args, device, translation_model, compute_type, console, cpu_threads)
             elif (mode == "point"):
                 point_mode = select_pointsync_mode()
-                run_pointsync(args, point_mode, device, translation_model, console)
+                run_pointsync(args, point_mode, device, translation_model, console, cpu_threads)
             elif (mode == "translate"):
-                run_translation(args, device, translation_model, compute_type, console)
+                run_translation(args, device, translation_model, compute_type, console, cpu_threads)
             elif (mode == "transcribe"):
                 run_transcription(args, device, model_size, compute_type, console, cpu_threads)
             elif (mode == "container"):
