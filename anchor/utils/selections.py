@@ -25,7 +25,7 @@ def select_run_mode():
         {"id": "1", "icon": "🔊", "name": "Audio Sync", "desc": "Automatic Sync via Whisper", "req": ["ffmpeg"]},
         {"id": "2", "icon": "📑", "name": "Reference Sync", "desc": "Automatic Sync using a perfectly timed reference subtitle", "req": []},
         {"id": "3", "icon": "📍", "name": "Point Sync", "desc": "Sync via reference Subtitle", "req": []},
-        {"id": "4", "icon": "🌐", "name": "Translate", "desc": "Translate subtitle text to another language", "req": []},
+        {"id": "4", "icon": "🔤", "name": "Translate", "desc": "Translate subtitle text to another language", "req": []},
         {"id": "5", "icon": "📝", "name": "Transcribe", "desc": "Generate subtitles from video/audio", "req": ["ffmpeg"]},
         {"id": "6", "icon": "📦", "name": "Container Tasks", "desc": "Extract, Embed, or Strip subtitles from media", "req": ["ffmpeg", "ffprobe"]},
         {"id": "7", "icon": "🔥", "name": "Burn-in", "desc": "Permanently burn subtitles into video", "req": ["ffmpeg"]},
