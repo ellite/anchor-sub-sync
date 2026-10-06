@@ -37,6 +37,11 @@ MIN_DURATION = 0.5
 MAX_DURATION = 7.0
 MIN_GAP = 0.05
 
+# WhisperX forced alignment stretches a word that has no acoustic evidence (a hallucinated or mis-heard
+# first word) over seconds: "The" 4.4 s, "Hold" 8.2 s, "Victim's" 23 s. Real words are well under this.
+STRETCHED_WORD_SEC = 1.5
+STRETCHED_WORD_BACKOFF_SEC = 0.3
+
 # Repair Settings
 REPAIR_PADDING_PASS_1 = 0.5
 REPAIR_PADDING_PASS_2 = 5.0
@@ -190,102 +195,29 @@ def write_srt(segments, output_path):
             f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
 
 # ==========================================
-# ⏱️ TIMING LOGIC (Snap & Zip)
+# ⏱️ TIMING LOGIC
 # ==========================================
 
-def snap_segments_to_words(segments, console):
+def trim_stretched_leading_words(segments):
+    """Fixes segments whose first words WhisperX aligned with an absurd duration.
+
+    The segment start comes from the first word, so one stretched "The" at 0.0 s turned a 5 s announcement
+    that really starts at 9.8 s into a 14.6 s cue starting at 0.0 s. Leading words longer than
+    STRETCHED_WORD_SEC are dropped (at least one word is always kept) and the segment start moves to just
+    before the first real word, STRETCHED_WORD_BACKOFF_SEC per dropped word, never earlier than the original start.
+    Returns the number of segments changed. Modifies the segments in place.
     """
-    Uses WhisperX word timestamps to shrink segment boundaries to exact speech.
-    """
-    if not segments: return []
-    snapped = []
-    
+    changed = 0
     for seg in segments:
-        if not seg: continue
-        
-        # Keep original text/structure
-        new_s = dict(seg)
-        
-        # Check for word-level timings
-        words = new_s.get("words", [])
-        
-        # Filter for valid words (some might lack start/end if unaligned)
-        valid_words = [w for w in words if w.get("start") is not None and w.get("end") is not None]
-        
-        if valid_words:
-            # SNAP! Update segment bounds to match first/last word
-            new_s["start"] = valid_words[0]["start"]
-            new_s["end"] = valid_words[-1]["end"]
-        
-        # Ensure types are floats
-        new_s["start"] = float(new_s["start"])
-        new_s["end"] = float(new_s["end"])
-        
-        snapped.append(new_s)
-        
-    return snapped
-
-def run_zipper_fix(segments):
-    """
-    Resolves overlaps and ensures minimum gaps/durations.
-    """
-    if not segments: return []
-    
-    # Clean & Sort
-    clean_segs = []
-    for s in segments:
-        txt = clean_text(s.get("text", ""))
-        if txt:
-            new_s = dict(s)
-            new_s["text"] = txt
-            clean_segs.append(new_s)
-            
-    clean_segs.sort(key=lambda x: x["start"])
-    
-    # The Zipper Loop
-    processed = []
-    if clean_segs:
-        processed.append(clean_segs[0])
-        
-    for i in range(1, len(clean_segs)):
-        prev = processed[-1]
-        curr = clean_segs[i]
-        
-        required_start = prev["end"] + MIN_GAP
-        
-        if required_start > curr["start"]:
-            # OVERLAP! Shrink prev to fit
-            new_prev_end = curr["start"] - MIN_GAP
-            prev_duration = new_prev_end - prev["start"]
-            
-            if prev_duration < MIN_DURATION:
-                # If shrinking kills prev, push curr instead
-                prev["end"] = prev["start"] + MIN_DURATION
-                curr["start"] = prev["end"] + MIN_GAP
-                if curr["end"] < curr["start"] + MIN_DURATION:
-                     curr["end"] = curr["start"] + max((curr["end"] - curr["start"]), MIN_DURATION)
-            else:
-                prev["end"] = new_prev_end
-        
-        # Max Duration Clamp (Safety)
-        dur = curr["end"] - curr["start"]
-        if dur > MAX_DURATION:
-            new_start = curr["end"] - MAX_DURATION
-
-            # Don't violate previous segment + gap
-            min_start = prev["end"] + MIN_GAP
-            if new_start < min_start:
-                new_start = min_start
-
-            curr["start"] = new_start
-
-            # Ensure minimum duration still holds (rare edge case)
-            if curr["end"] < curr["start"] + MIN_DURATION:
-                curr["end"] = curr["start"] + MIN_DURATION
-
-        processed.append(curr)
-        
-    return processed
+        words = [w for w in (seg.get("words") or []) if w.get("start") is not None and w.get("end") is not None]
+        dropped = 0
+        while len(words) - dropped > 1 and words[dropped]["end"] - words[dropped]["start"] > STRETCHED_WORD_SEC:
+            dropped += 1
+        if dropped:
+            seg["words"] = words[dropped:]
+            seg["start"] = max(float(seg["start"]), words[dropped]["start"] - STRETCHED_WORD_BACKOFF_SEC * dropped)
+            changed += 1
+    return changed
 
 # ==========================================
 # 🔧 MERGE-STITCHING HELPERS
@@ -752,7 +684,11 @@ class GlobalAligner:
         gap_sec = MIN_GAP 
 
         processed = []
-        if subs: processed.append(subs[0])
+        if subs:
+            # The first cue is not reached by the loop below, so clamp its duration here as well.
+            if (subs[0]["end"] - subs[0]["start"]) > MAX_DURATION:
+                subs[0]["start"] = subs[0]["end"] - MAX_DURATION
+            processed.append(subs[0])
 
         for i in range(1, len(subs)):
             prev = processed[-1]
@@ -1075,6 +1011,7 @@ def run_transcription(args, device, model_size, compute_type, console: Console, 
                 audio = whisperx.load_audio(str(input_path))
                 result = whisperx.align(clean_segments, model_a, metadata, audio, device, return_char_alignments=False)
                 aligned_segments = result["segments"]
+                trim_stretched_leading_words(aligned_segments)
                 
                 del model_a
                 gc.collect()
