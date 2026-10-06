@@ -250,7 +250,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
 
             # Step 3: Align & Sync
             if needs_translation and original_sub_object:
-                _, rejected = align_subtitles(ghost_sub, whisper_data)
+                _, rejected, anchors = align_subtitles(ghost_sub, whisper_data)
                 lines = len(original_sub_object)
 
                 console.print("[dim]📥 Applying synced timestamps back to original subtitle...[/dim]")
@@ -268,12 +268,13 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                 original_sub_object.save(str(final_output_path))
                 console.print(f"💾 Restored Original Content to: [underline]{final_output_path.name}[/underline]")
             else:
-                final_output_path, lines, rejected = run_anchor_align_and_sync(sub, whisper_data, args)
+                final_output_path, lines, rejected, anchors = run_anchor_align_and_sync(sub, whisper_data, args)
 
             duration = time.time() - start_time
 
             console.print(f"[bold green]✨ Success![/bold green] ({duration:.1f}s)")
             console.print(f" 📝 Lines Processed: {lines}")
+            console.print(f" ⚓ Anchors: {anchors} of {lines} lines")
             console.print(f" 🗑️ Outliers Rejected: {rejected}")
 
             if not needs_translation:

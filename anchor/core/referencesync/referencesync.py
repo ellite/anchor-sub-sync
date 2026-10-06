@@ -165,7 +165,7 @@ def run_referencesync(args, device, translation_model, compute_type, console, cp
 
             # 3. Run Global Aligner to map the target text to the reference timings
             console.print("[dim]🧠 Routing text to Global Aligner...[/dim]")
-            aligner = GlobalAligner(target_subs_obj, pseudo_whisper)
+            aligner = GlobalAligner(target_subs_obj, pseudo_whisper, reference=True)
             synced_subs_obj, rejected = aligner.run()
 
             if not synced_subs_obj:
@@ -196,6 +196,7 @@ def run_referencesync(args, device, translation_model, compute_type, console, cp
 
             console.print(f"[bold green]✨ Success![/bold green] ({duration:.1f}s)")
             console.print(f" 📝 Lines Processed: {lines}")
+            console.print(f" ⚓ Anchors: {aligner.anchor_count} of {lines} lines")
             console.print(f" 🗑️ Outliers Rejected: {rejected}")
             console.print(f"💾 Saved to: [underline]{final_output_path.name}[/underline]")
 
