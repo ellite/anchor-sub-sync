@@ -1,6 +1,9 @@
-import pysubs2
+import contextlib
 import difflib
 import itertools
+import logging
+
+import pysubs2
 import numpy as np
 from rich.console import Console
 from .formatting import clean_text
@@ -26,12 +29,30 @@ FAST_SEGMENT_MIN_WORDS = 3   # a segment with at least this many words ...
 FAST_SEGMENT_MAX_WPS = 8.0   # ... faster than this cannot be real speech
 DENSE_WINDOW_SEC = 3.0       # more words than DENSE_MAX_WPS per second inside this window ...
 DENSE_MAX_WPS = 7.5          # ... is also a collapse (Whisper squeezing a long scene into a few seconds)
+AUDIO_STRONG_ANCHORS = True   # audio mode: strong matches skip the neighbour-median drift filter too
+AUDIO_WEAK_DRIFT_TOL_SEC = 1.5  # audio mode: max distance of a weak match from the strong anchors' drift curve
 WEAK_DRIFT_TOL_SEC = 5.0      # reference mode: max distance of a weak match from the strong anchors' drift curve
 STRONG_MATCH_WORDS = 4       # reference mode: a cue with at least this many matched words ...
 STRONG_MATCH_RATIO = 0.6     # ... covering this share of its words skips the drift outlier filter
 # =============================================
 
 console = Console()
+
+
+@contextlib.contextmanager
+def quiet_library_logs():
+    """Hides the log lines libraries print while we call them.
+
+    WhisperX logs a warning for every segment its aligner cannot time ("backtrack failed, resorting to original") and
+    falls back to the segment's own timing; the sync does not need to show that. Logging is switched off only for the
+    duration of the block, then restored.
+    """
+    previous = logging.root.manager.disable
+    logging.disable(logging.WARNING)
+    try:
+        yield
+    finally:
+        logging.disable(previous)
 
 def smooth_offsets_by_block(anchors):
     """Audio mode: gives each anchor the shift of its block ("scene": anchors less than SCENE_GAP_SEC apart).
@@ -192,6 +213,7 @@ class GlobalAligner:
         self.whisper = whisper_data
         self.reference = reference
         self.anchor_count = 0  # valid anchors found by the last run()
+        self.anchored_idx = set()  # indices of the cues that anchored in the last run()
 
     def _match_start(self, matches):
         """Start time of a subtitle cue from its matched words, as (position in cue, token) pairs."""
@@ -302,7 +324,7 @@ class GlobalAligner:
                     'idx': idx, 'orig_start': sub.start/1000.0, 
                     'raw_match_time': match_start, 'drift': drift,
                     'end_time': self._match_end(sub_matches[idx], cue_words[idx]),
-                    'strong': self.reference and self._is_strong(len(sub_matches[idx]), cue_words[idx])
+                    'strong': (self.reference or AUDIO_STRONG_ANCHORS) and self._is_strong(len(sub_matches[idx]), cue_words[idx])
                 })
 
         if not candidates: return None, 0
@@ -316,7 +338,8 @@ class GlobalAligner:
         # not against their neighbours' median, because two subtitle releases rarely differ by a
         # uniform offset (it can move by seconds from one cue to the next).
         strong = [c for c in candidates if c['strong']]
-        trusted = len(strong) >= 2 and WEAK_DRIFT_TOL_SEC is not None
+        weak_tol = WEAK_DRIFT_TOL_SEC if self.reference else AUDIO_WEAK_DRIFT_TOL_SEC
+        trusted = len(strong) >= 2 and weak_tol is not None
         if trusted:
             strong_x = [c['orig_start'] for c in strong]
             strong_drift = [c['drift'] for c in strong]
@@ -331,7 +354,7 @@ class GlobalAligner:
             if cand['strong']:
                 raw_anchors.append(cand)
             elif trusted:
-                if abs(cand['drift'] - np.interp(cand['orig_start'], strong_x, strong_drift)) > WEAK_DRIFT_TOL_SEC:
+                if abs(cand['drift'] - np.interp(cand['orig_start'], strong_x, strong_drift)) > weak_tol:
                     rejected_count += 1
                 else:
                     raw_anchors.append(cand)
@@ -342,6 +365,7 @@ class GlobalAligner:
 
         console.print(f"[dim]   ⚓️ Valid Anchors: {len(raw_anchors)} (Rejected {rejected_count} outliers)[/dim]")
         self.anchor_count = len(raw_anchors)
+        self.anchored_idx = {a['idx'] for a in raw_anchors}
         
         anchors = anchor_exactly(raw_anchors) if self.reference else smooth_offsets_by_block(raw_anchors)
         

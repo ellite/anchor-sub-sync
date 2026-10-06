@@ -27,6 +27,7 @@ logging.getLogger("whisperx").setLevel(logging.ERROR)
 logging.getLogger("faster_whisper").setLevel(logging.ERROR)
 
 from ...utils.files import select_files_interactive, get_files
+from ...utils.alignment import quiet_library_logs
 from ...utils.languages import get_audio_language
 
 # ==========================================
@@ -538,7 +539,9 @@ def zone_quality_score(segs):
     return score
 
 
-def repair_zone_best(model, device, compute_type, audio_path, zone_segments, repair_padding, language, cpu_threads=0):
+def repair_zone_best(model, device, compute_type, audio_path, zone_segments, repair_padding, language, cpu_threads=0, whisper_model=None):
+    """Re-transcribes a zone. `model` is the model name; pass an already loaded faster-whisper `whisper_model` to
+    avoid loading it again for every zone (about 14 s each for large-v3). The caller then owns its lifetime."""
     core_start = float(zone_segments[0]["start"])
     core_end = float(zone_segments[-1]["end"])
     start = max(0.0, core_start - repair_padding)
@@ -560,7 +563,7 @@ def repair_zone_best(model, device, compute_type, audio_path, zone_segments, rep
         # Re-using the model instance is faster than reloading it, 
         # but clear internal state if possible. 
         # It uses 'transcribe' which resets state, passing 'm' is fine.
-        m = WhisperModel(model, device=device, compute_type=compute_type, cpu_threads=cpu_threads)
+        m = whisper_model if whisper_model is not None else WhisperModel(model, device=device, compute_type=compute_type, cpu_threads=cpu_threads)
         
         for i, cfg in enumerate(attempts):
             try:
@@ -602,10 +605,11 @@ def repair_zone_best(model, device, compute_type, audio_path, zone_segments, rep
                 # If one config fails, try the next
                 continue
                 
-        # Cleanup
-        del m
-        gc.collect()
-        if device == "cuda": torch.cuda.empty_cache()
+        # Cleanup (only a model we loaded ourselves)
+        if whisper_model is None:
+            del m
+            gc.collect()
+            if device == "cuda": torch.cuda.empty_cache()
         
         return best if best is not None else zone_segments
     finally:
@@ -1009,7 +1013,8 @@ def run_transcription(args, device, model_size, compute_type, console: Console, 
                 
                 model_a, metadata = whisperx.load_align_model(language_code=actual_lang, device=device)
                 audio = whisperx.load_audio(str(input_path))
-                result = whisperx.align(clean_segments, model_a, metadata, audio, device, return_char_alignments=False)
+                with quiet_library_logs():
+                    result = whisperx.align(clean_segments, model_a, metadata, audio, device, return_char_alignments=False)
                 aligned_segments = result["segments"]
                 trim_stretched_leading_words(aligned_segments)
                 

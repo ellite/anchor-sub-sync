@@ -36,6 +36,16 @@ def parse_arguments():
         default=None
     )
 
+    parser.add_argument(
+        "--asr",
+        choices=["auto", "whisper", "parakeet"],
+        default="auto",
+        help=("Speech recognition engine for audio sync. 'parakeet' (NVIDIA Parakeet, 25 European languages) is faster and "
+              "places cues more accurately; it is installed on first use into ~/.anchor/parakeet-venv. 'auto' (default) uses "
+              "Parakeet only when it is already installed and the audio language is supported, otherwise Whisper. "
+              "'whisper' never uses Parakeet.")
+    )
+
     # Sync Options
     parser.add_argument(
         "-o", "--overwrite",

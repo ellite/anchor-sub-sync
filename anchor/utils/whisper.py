@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 from .ui import make_ui_console, CaptureProgress
 from .files import open_subtitle, backup_if_needed
-from .alignment import GlobalAligner, drop_implausible_timing
+from .alignment import GlobalAligner, drop_implausible_timing, quiet_library_logs
 
 console = Console()
 
@@ -62,6 +62,7 @@ def repair_suspicious_segments(segments, video_path, model_name, device, compute
 
     segs = [dict(s) for s in segments]
     zone_count = repaired = 0
+    fw = None   # one faster-whisper model for every zone, loaded when the first zone needs it
     for padding in (T.REPAIR_PADDING_PASS_1, T.REPAIR_PADDING_PASS_2):
         suspicious = [i for i, seg in enumerate(segs) if T.is_suspicious(seg, i, segs)]
         if not suspicious:
@@ -72,7 +73,9 @@ def repair_suspicious_segments(segments, video_path, model_name, device, compute
         for z_start, z_end in reversed(zones):
             bad = segs[z_start:z_end + 1]
             original = [dict(s, text=T.clean_text(s.get("text", ""))) for s in bad if T.clean_text(s.get("text", ""))]
-            fixed = T.repair_zone_best(model_name, device, compute_type, video_path, bad, padding, language, cpu_threads)
+            if fw is None:
+                fw = T.WhisperModel(model_name, device=device, compute_type=compute_type, cpu_threads=cpu_threads)
+            fixed = T.repair_zone_best(model_name, device, compute_type, video_path, bad, padding, language, cpu_threads, whisper_model=fw)
             if T.zone_quality_score(fixed) > T.zone_quality_score(original) + 0.3:
                 final = fixed
                 repaired += 1
@@ -83,6 +86,10 @@ def repair_suspicious_segments(segments, video_path, model_name, device, compute
             segs = T.stitch_boundaries(segs, first, last)
             segs = T.dedupe_window(segs, first, last)
         segs = T.cleanup_redundancies(segs)
+    if fw is not None:
+        del fw
+        gc.collect()
+        if device == "cuda": torch.cuda.empty_cache()
     return segs, zone_count, repaired
 
 
@@ -188,14 +195,15 @@ def run_whisper_transcription(video_path, device, compute_type, batch_size, mode
             model_a, metadata = whisperx.load_align_model(language_code=detected_lang, device=device)
             audio_for_align = whisperx.load_audio(str(video_path))
 
-            aligned_result = whisperx.align(
-                result["segments"],
-                model_a,
-                metadata,
-                audio_for_align,
-                device,
-                return_char_alignments=False,
-            )
+            with quiet_library_logs():
+                aligned_result = whisperx.align(
+                    result["segments"],
+                    model_a,
+                    metadata,
+                    audio_for_align,
+                    device,
+                    return_char_alignments=False,
+                )
             segments = aligned_result["segments"]
 
             del model_a; del audio_for_align; gc.collect()

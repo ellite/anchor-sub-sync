@@ -8,6 +8,7 @@ from ...utils.files import get_files, find_best_video_match, select_video_fallba
 from ...utils.mappings import get_language_code_for_nllb
 from ...utils.languages import get_audio_language, get_subtitle_language
 from ...utils.whisper import run_whisper_transcription, run_anchor_align_and_sync, align_subtitles, load_whisper_model
+from ...utils import parakeet
 from ..translation import translate_subtitle_nllb
 
 # Constants
@@ -93,7 +94,15 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
     console.print(f"\n[bold green]🚀 Starting {action} ({len(queue)} {file_label})...[/bold green]")
     
     total_start = time.time()
-    
+
+    # Speech recognition engine. An explicit --asr parakeet is consent to install it; 'auto' never installs anything.
+    asr = getattr(args, "asr", "auto") or "auto"
+    parakeet_ok = False
+    if asr == "parakeet":
+        parakeet_ok = parakeet.ensure_ready(console, device, install_if_missing=True)
+    elif asr == "auto":
+        parakeet_ok = parakeet.is_installed()
+
     current_model = None
     loaded_lang_code = "UNSET"
     
@@ -180,25 +189,58 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
             if target_model in {"tiny", "base", "small", "medium"}:
                 target_model = f"{target_model}.en"
 
-        console.print(f"[dim]🎯 Target Model: [bold white]{target_model}[/bold white][/dim]")
+        # Which engine hears this file? Parakeet covers 25 languages; everything else, and any failure, uses Whisper.
+        use_parakeet = False
+        if asr != "whisper" and parakeet_ok:
+            if parakeet.supports_language(meta_lang):
+                use_parakeet = True
+            elif meta_lang is None:
+                use_parakeet = (asr == "parakeet")      # unknown language: only when explicitly asked for
+            elif asr == "parakeet":
+                console.print(f"[yellow]⚠️ Parakeet does not support {meta_lang.upper()}. Using Whisper for this file.[/yellow]")
 
-        # Load/Reload Whisper Model
-        if current_model is None or loaded_lang_code != meta_lang or needs_translation:
-            if current_model is not None:
-                console.print(f"[dim]🌐 Language changed ({loaded_lang_code} -> {meta_lang}). Switching model...[/dim]")
-                del current_model
-                gc.collect()
-                if device == "cuda": torch.cuda.empty_cache()
+        def ensure_whisper_loaded():
+            nonlocal current_model, loaded_lang_code
+            console.print(f"[dim]🎯 Target Model: [bold white]{target_model}[/bold white][/dim]")
+            if current_model is None or loaded_lang_code != meta_lang or needs_translation:
+                if current_model is not None:
+                    console.print(f"[dim]🌐 Language changed ({loaded_lang_code} -> {meta_lang}). Switching model...[/dim]")
+                    current_model = None
+                    gc.collect()
+                    if device == "cuda": torch.cuda.empty_cache()
 
-            current_model = load_whisper_model(device, compute_type, meta_lang, target_model)
-            loaded_lang_code = meta_lang
-        else:
-            console.print(f"[dim]♻️  Reusing cached model ({loaded_lang_code if loaded_lang_code else 'Auto'})...[/dim]")
+                current_model = load_whisper_model(device, compute_type, meta_lang, target_model)
+                loaded_lang_code = meta_lang
+            else:
+                console.print(f"[dim]♻️  Reusing cached model ({loaded_lang_code if loaded_lang_code else 'Auto'})...[/dim]")
 
         start_time = time.time()
         try:
             # Step 1: Transcribe
-            whisper_data, detected_lang = run_whisper_transcription(vid, device, compute_type, batch_size, current_model, meta_lang, model_name=target_model, cpu_threads=cpu_threads)
+            parakeet_used = False
+            whisper_data = detected_lang = media_duration = None
+            if use_parakeet:
+                try:
+                    console.print("[dim]🦜 Transcribing with Parakeet...[/dim]")
+                    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(),
+                                  TaskProgressColumn(), TimeElapsedColumn(), console=console, transient=True) as progress:
+                        task = progress.add_task("[cyan]Parakeet: extracting audio...", total=None)
+
+                        def on_progress(stage, done, total):
+                            if stage == "model":
+                                progress.update(task, description="[cyan]Parakeet: loading the model...")
+                            elif stage == "chunks" and total:
+                                progress.update(task, description="[cyan]Parakeet: transcribing...", total=total, completed=done)
+
+                        whisper_data, media_duration = parakeet.transcribe(vid, device, console, on_progress)
+                    detected_lang = meta_lang or parakeet.detect_language(whisper_data) or (sub_lang if sub_lang != "unknown" else "en")
+                    parakeet_used = True
+                    console.print(f"[dim]📝 Parakeet transcription complete ({sum(len(s['words']) for s in whisper_data)} words).[/dim]")
+                except Exception as e:
+                    console.print(f"[yellow]⚠️ Parakeet failed ({e}). Using Whisper.[/yellow]")
+            if not parakeet_used:
+                ensure_whisper_loaded()
+                whisper_data, detected_lang = run_whisper_transcription(vid, device, compute_type, batch_size, current_model, meta_lang, model_name=target_model, cpu_threads=cpu_threads)
 
             if whisper_data is None:
                 failed_count += 1
@@ -247,6 +289,19 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
 
                     console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {detected_lang.upper()}).[/dim]")
                     event_pairs = list(zip(original_sub_object, ghost_sub))
+
+            # Step 2b: Parakeet drops some short shouted lines. Re-transcribe (faster-whisper, loaded once) only the
+            # windows where the subtitle has cues Parakeet did not hear.
+            if parakeet_used:
+                try:
+                    target_subs = ghost_sub if (needs_translation and original_sub_object) else open_subtitle(sub)
+                    whisper_data, zones, recovered = parakeet.repair_missing_speech(
+                        whisper_data, target_subs, vid, media_duration, meta_lang or detected_lang,
+                        target_model, device, compute_type, cpu_threads, console)
+                    if zones:
+                        console.print(f"[dim]🔧 Gap repair: {zones} zone(s) around cues Parakeet did not hear, {recovered} words recovered.[/dim]")
+                except Exception as e:
+                    console.print(f"[yellow]⚠️ Gap repair skipped ({e}).[/yellow]")
 
             # Step 3: Align & Sync
             if needs_translation and original_sub_object:

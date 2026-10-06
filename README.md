@@ -417,6 +417,7 @@ You can override the automatic hardware detection or control specific settings u
 | --audio-model | -a | Force a specific Whisper model (e.g., tiny, medium, large-v3-turbo). |
 | --batch-size | -b | Manually set the batch size (e.g., 8, 16). Useful for optimizing VRAM usage. |
 | --translation-model | -t | Force a specific translation model (overrides automatic selection). |
+| --asr | | Speech recognition engine for audio sync: `auto` (default), `whisper` or `parakeet`. See [Parakeet engine](#-parakeet-engine-optional) below. |
 | --subtitle | -s | Runs unattended sync on a single subtitle file (provide path to .srt, .ass, etc.) |
 | --reference | -r | For unattended sync, provide reference subtitle file path for reference sync |
 | --video | -v | For unattended sync, provide path to the video file if the script fails to auto-match |
@@ -452,6 +453,12 @@ Run unattended sync:
 anchor -s A.3.Minutes.Example.Video.en.srt -v A.3.Minutes.Example.Video.mkv 
 ```
 
+Run unattended sync with the Parakeet engine (installs it on first use):
+
+```bash
+anchor -s A.3.Minutes.Example.Video.en.srt -v A.3.Minutes.Example.Video.mkv --asr parakeet
+```
+
 Run unattended reference sync:
 
 ```bash
@@ -480,6 +487,26 @@ Run unattended download for all files for specific languages:
 ```bash
 anchor -d -l en,fr
 ```
+
+## 🦜 Parakeet engine (optional)
+
+Audio sync can use NVIDIA's Parakeet speech recognition model (`parakeet-tdt-0.6b-v3`) instead of WhisperX to find where
+the words are spoken. In our tests it placed cues more accurately and ran faster (about 4 s against 10 s for five
+minutes of audio), but it only covers 25 European languages (including English, Portuguese, Spanish, French, German and
+Italian) and it drops some short shouted lines in loud scenes. Anchor therefore keeps Whisper for every other language
+and uses a short Whisper pass only where the subtitle has cues Parakeet did not hear.
+
+| `--asr` | What happens |
+| ------- | ------------ |
+| `auto` (default) | Uses Parakeet only if it is already installed and the audio language is supported. Otherwise Whisper. It never installs anything. |
+| `parakeet` | Installs Parakeet on first use, then uses it for every supported file. Unsupported languages, or any Parakeet failure, fall back to Whisper for that file. |
+| `whisper` | Never uses Parakeet. |
+
+Using `--asr parakeet` for the first time creates an isolated environment in `~/.anchor/parakeet-venv` (so it cannot
+disturb PyTorch or WhisperX) and downloads the model on the first run. Expect about **3.4 GB** of packages on an NVIDIA GPU
+under Linux (mostly CUDA libraries), about 0.3 GB for the CPU build, plus **about 3 GB** for the model. On Windows, macOS and
+AMD GPUs the CPU build is used (about 41 s per five minutes of audio). Delete `~/.anchor/parakeet-venv` to remove it. The
+`--asr` option only affects audio sync.
 
 ## ⚙️ Development
 
