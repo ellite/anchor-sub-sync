@@ -100,6 +100,14 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
     
     failed_count = 0
 
+    def free_whisper():
+        """Release the Whisper model so NLLB has VRAM to load into."""
+        nonlocal current_model, loaded_lang_code
+        current_model = None
+        loaded_lang_code = "UNSET"
+        gc.collect()
+        if device == "cuda": torch.cuda.empty_cache()
+
     for i, (sub, vid) in enumerate(queue, 1):
         console.print(f"\n[bold reverse] Task {i}/{len(queue)} [/bold reverse] [cyan]{sub.name}[/cyan]")
         console.print(f"🎬 Video: [yellow]{vid.name}[/yellow]")
@@ -130,6 +138,8 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
         if needs_translation:
             # Load the ORIGINAL content into memory now
             original_sub_object = open_subtitle(sub)
+
+            free_whisper()
             
             nllb_source = get_language_code_for_nllb(sub_lang)
             nllb_target = get_language_code_for_nllb(meta_lang)
@@ -158,6 +168,10 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                     task_id=task,
                     cpu_threads=cpu_threads
                 )
+
+            if ghost_sub is None:
+                failed_count += 1
+                continue
 
             console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {meta_lang.upper()}).[/dim]")
 
@@ -207,6 +221,8 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                     needs_translation = True
                     original_sub_object = open_subtitle(sub)
 
+                    free_whisper()
+
                     nllb_source = get_language_code_for_nllb(sub_lang)
                     nllb_target = get_language_code_for_nllb(detected_lang)
 
@@ -234,6 +250,9 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                             task_id=task,
                             cpu_threads=cpu_threads
                         )
+
+                    if ghost_sub is None:
+                        raise RuntimeError("Translation failed")
 
                     console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {detected_lang.upper()}).[/dim]")
 
@@ -289,8 +308,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
             console.print(f"[bold red]❌ Failed:[/bold red] {e}")
 
     # Cleanup at very end
-    if current_model:
-        del current_model
+    free_whisper()
     
     total_duration = time.time() - total_start
     
