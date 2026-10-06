@@ -165,15 +165,25 @@ def run_whisper_transcription(video_path, device, compute_type, batch_size, mode
     return whisper_data, detected_lang
 
 
-def run_anchor_align_and_sync(sub_path, whisper_data, args=None):
-    """Runs GlobalAligner on pre-computed whisper data and saves the synced subtitle."""
+def align_subtitles(subs, whisper_data):
+    """Runs GlobalAligner on an in-memory subtitle. Retimes the events of `subs` in place.
+
+    Returns (synced_subs, rejected_count). The synced file may be re-sorted, but its events are
+    the same objects as in `subs`, so callers holding references to them see the new timings.
+    """
     console.print("[dim]🧮 Calculating sync offsets...[/dim]")
-    original_subs = open_subtitle(sub_path)
-    aligner = GlobalAligner(original_subs, whisper_data)
-    synced_subs, rejected = aligner.run()
+    synced_subs, rejected = GlobalAligner(subs, whisper_data).run()
 
     if synced_subs is None:
         raise Exception("Zero matches found.")
+
+    return synced_subs, rejected
+
+
+def run_anchor_align_and_sync(sub_path, whisper_data, args=None):
+    """Runs GlobalAligner on pre-computed whisper data and saves the synced subtitle."""
+    original_subs = open_subtitle(sub_path)
+    synced_subs, rejected = align_subtitles(original_subs, whisper_data)
 
     if args and getattr(args, "overwrite", False):
         backup_if_needed(sub_path, args)

@@ -104,9 +104,9 @@ def run_referencesync(args, device, translation_model, compute_type, console, cp
             console.print(f"[dim]⚠️ Mismatch detected. Translating Target ({target_lang.upper()}) to match Reference ({ref_lang.upper()}).[/dim]")
             needs_translation = True
 
-        sub_input_for_sync = target_sub      
-        original_sub_object = None    
-        ghost_file_path = None        
+        original_sub_object = None
+        ghost_sub = None
+        event_pairs = []
         
         # Translation (if needed)
         if needs_translation:
@@ -138,23 +138,21 @@ def run_referencesync(args, device, translation_model, compute_type, console, cp
                     cpu_threads=cpu_threads
                 )
             
-            console.print(f"[dim]🔄 Translation complete ({target_lang.upper()} -> {ref_lang.upper()}).[/dim]")
+            if ghost_sub is None:
+                failed_count += 1
+                continue
 
-            # Save Ghost to a TEMP FILE
-            ghost_file_path = target_sub.with_suffix(f".tmp.{ref_lang}.srt")
-            ghost_sub.save(str(ghost_file_path))
-            
-            sub_input_for_sync = ghost_file_path
-            console.print(f"[dim]👻 Created temporary sync target: {ghost_file_path.name}[/dim]")
+            console.print(f"[dim]🔄 Translation complete ({target_lang.upper()} -> {ref_lang.upper()}).[/dim]")
+            event_pairs = list(zip(original_sub_object, ghost_sub))
 
         # ==========================================
         # 3. ALIGNMENT LOGIC
         # ==========================================
         start_time = time.time()
         try:
-            # 1. Load the target text and the perfect reference text
-            target_subs_obj = pysubs2.load(str(sub_input_for_sync))
-            ref_subs_obj = pysubs2.load(str(ref_sub))
+            # 1. Load the target text (the in-memory ghost when translated) and the reference
+            target_subs_obj = ghost_sub if needs_translation else open_subtitle(target_sub)
+            ref_subs_obj = open_subtitle(ref_sub)
 
             # 2. Trick the engine: Convert the reference subtitle into pseudo-Whisper data
             pseudo_whisper = []
@@ -175,61 +173,31 @@ def run_referencesync(args, device, translation_model, compute_type, console, cp
 
             lines = len(synced_subs_obj)
 
-            # 4. Save the locally synced output to a temporary path
-            out_path = sub_input_for_sync.with_suffix(".aligned.tmp.srt")
-            synced_subs_obj.save(str(out_path))
-            
-            # Restoration Logic (Applies translated timestamps back to original)
-            final_output_path = out_path 
-            
-            if needs_translation and original_sub_object:
+            if needs_translation:
+                # Copy timings from the synced ghost events back onto the original events
                 console.print("[dim]📥 Applying synced timestamps back to original subtitle...[/dim]")
-                synced_ghost = pysubs2.load(str(out_path))
-                
-                for orig_event, ghost_event in zip(original_sub_object, synced_ghost):
+                for orig_event, ghost_event in event_pairs:
                     orig_event.start = ghost_event.start
                     orig_event.end = ghost_event.end
-                
-                if args and getattr(args, "overwrite", False):
-                    backup_if_needed(target_sub, args)
-                    final_output_path = target_sub
-                    console.print(f"[dim]💾 Overwriting original subtitle: {final_output_path.name}[/dim]")
-                else:
-                    final_output_path = target_sub.with_suffix(".synced.srt")
+                result_subs = original_sub_object
+            else:
+                result_subs = synced_subs_obj
 
-                original_sub_object.save(str(final_output_path))
-                console.print(f"💾 Restored Original Content to: [underline]{final_output_path.name}[/underline]")
-                
-                # Cleanup Temp Files
-                try:
-                    if ghost_file_path and ghost_file_path.exists():
-                        ghost_file_path.unlink()
-                    if out_path.exists() and out_path != final_output_path and out_path != target_sub:
-                        out_path.unlink() 
-                except Exception:
-                    pass 
+            if args and getattr(args, "overwrite", False):
+                backup_if_needed(target_sub, args)
+                final_output_path = target_sub
+                console.print(f"[dim]💾 Overwriting original subtitle: {final_output_path.name}[/dim]")
+            else:
+                final_output_path = target_sub.with_suffix(".synced.srt")
+
+            result_subs.save(str(final_output_path))
 
             duration = time.time() - start_time
-            
+
             console.print(f"[bold green]✨ Success![/bold green] ({duration:.1f}s)")
             console.print(f" 📝 Lines Processed: {lines}")
             console.print(f" 🗑️ Outliers Rejected: {rejected}")
-            
-            if not needs_translation:
-                # If it wasn't translated, handle the final save for the native language file
-                if args and getattr(args, "overwrite", False):
-                    backup_if_needed(target_sub, args)
-                    final_output_path = target_sub
-                    console.print(f"[dim]💾 Overwriting original subtitle: {final_output_path.name}[/dim]")
-                else:
-                    final_output_path = target_sub.with_suffix(".synced.srt")
-
-                synced_subs_obj.save(str(final_output_path))
-                console.print(f"💾 Saved aligned subtitle to: [underline]{final_output_path.name}[/underline]")
-                
-                # Cleanup the temp alignment file
-                if out_path.exists() and out_path != final_output_path:
-                    out_path.unlink()
+            console.print(f"💾 Saved to: [underline]{final_output_path.name}[/underline]")
 
         except Exception as e:
             failed_count += 1

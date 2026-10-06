@@ -2,13 +2,12 @@ import sys
 import time
 import gc
 import torch
-import pysubs2
 from pathlib import Path
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, BarColumn, TaskProgressColumn
 from ...utils.files import get_files, find_best_video_match, select_video_fallback, open_subtitle, select_files_interactive, backup_if_needed
 from ...utils.mappings import get_language_code_for_nllb
 from ...utils.languages import get_audio_language, get_subtitle_language
-from ...utils.whisper import run_whisper_transcription, run_anchor_align_and_sync, load_whisper_model
+from ...utils.whisper import run_whisper_transcription, run_anchor_align_and_sync, align_subtitles, load_whisper_model
 from ..translation import translate_subtitle_nllb
 
 # Constants
@@ -127,12 +126,11 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
             console.print(f"[dim]⚠️ Mismatch detected: Audio is {meta_lang.upper()}, Subtitle is {sub_lang.upper()}. Needs translation.[/dim]")
             needs_translation = True
 
-        # Default: Sync the original file path
-        sub_input_for_sync = sub      
-        
-        # Variables for cleanup later
-        original_sub_object = None    
-        ghost_file_path = None        
+        # Translated "ghost" subtitle is synced in memory; each original event is paired with its
+        # ghost event up front so timings can be copied back by identity, not by position.
+        original_sub_object = None
+        ghost_sub = None
+        event_pairs = []
         
         # Translation
         if needs_translation:
@@ -174,14 +172,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                 continue
 
             console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {meta_lang.upper()}).[/dim]")
-
-            # Save Ghost to a TEMP FILE
-            ghost_file_path = sub.with_suffix(f".tmp.{meta_lang}.srt")
-            ghost_sub.save(str(ghost_file_path))
-            
-            # Point the sync engine to the translated temp file
-            sub_input_for_sync = ghost_file_path
-            console.print(f"[dim]👻 Created temporary sync target: {ghost_file_path.name}[/dim]")
+            event_pairs = list(zip(original_sub_object, ghost_sub))
 
         # Determine Target Model
         target_model = model_size
@@ -255,24 +246,15 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                         raise RuntimeError("Translation failed")
 
                     console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {detected_lang.upper()}).[/dim]")
-
-                    ghost_file_path = sub.with_suffix(f".tmp.{detected_lang}.srt")
-                    ghost_sub.save(str(ghost_file_path))
-                    sub_input_for_sync = ghost_file_path
-                    console.print(f"[dim]👻 Created temporary sync target: {ghost_file_path.name}[/dim]")
+                    event_pairs = list(zip(original_sub_object, ghost_sub))
 
             # Step 3: Align & Sync
-            out_path, lines, rejected = run_anchor_align_and_sync(sub_input_for_sync, whisper_data, args)
-
-            # Restoration Logic
-            final_output_path = out_path
-
             if needs_translation and original_sub_object:
+                _, rejected = align_subtitles(ghost_sub, whisper_data)
+                lines = len(original_sub_object)
+
                 console.print("[dim]📥 Applying synced timestamps back to original subtitle...[/dim]")
-
-                synced_ghost = pysubs2.load(str(out_path))
-
-                for orig_event, ghost_event in zip(original_sub_object, synced_ghost):
+                for orig_event, ghost_event in event_pairs:
                     orig_event.start = ghost_event.start
                     orig_event.end = ghost_event.end
 
@@ -285,14 +267,8 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
 
                 original_sub_object.save(str(final_output_path))
                 console.print(f"💾 Restored Original Content to: [underline]{final_output_path.name}[/underline]")
-
-                try:
-                    if ghost_file_path and ghost_file_path.exists():
-                        ghost_file_path.unlink()
-                    if out_path.exists() and out_path != final_output_path:
-                        out_path.unlink()
-                except Exception:
-                    pass
+            else:
+                final_output_path, lines, rejected = run_anchor_align_and_sync(sub, whisper_data, args)
 
             duration = time.time() - start_time
 

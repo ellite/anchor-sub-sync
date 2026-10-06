@@ -55,6 +55,10 @@ def run_auto_linear_sync(target_file, reference_file, device="cpu", model_id="Ju
                     cpu_threads=cpu_threads
                 )
 
+        if search_sub is None:
+            console.print("[bold red]❌ Translation failed, cannot match sync points across languages.[/bold red]")
+            return
+
         console.print(f"[dim]🔄 Translation complete ({lang_target.upper()} -> {lang_ref.upper()})[/dim]")
 
     # Get Candidates
