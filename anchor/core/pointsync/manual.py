@@ -83,10 +83,20 @@ def run_manual_sync_tui(target_file, reference_file, console=console, args=None)
 
 #  CURSES TUI ENGINE
 
-def _dual_pane_picker(stdscr, left_data, right_data, title):
+def _timestamped_row(item):
+    """Default row text for subtitle lines: (index, time_ms, text) -> "[mm:ss] text"."""
+    _, time_ms, text = item
+    return f"[{time_ms//60000:02d}:{(time_ms%60000)//1000:02d}] {text}"
+
+
+def _dual_pane_picker(stdscr, left_data, right_data, title,
+                      headers=("TARGET (Bad)", "REFERENCE (Good)"),
+                      row_text=_timestamped_row,
+                      instructions="[Arrows] Move/Switch  [Space] Select  [Enter] Confirm Pair  [Q] Cancel"):
     """
-    Dual-pane TUI for picking a matching pair of lines.
-    Returns: (left_timestamp, right_timestamp) or (None, None)
+    Dual-pane TUI for picking one item in each pane.
+    Items are (index, value, text) tuples; `row_text(item)` gives the text shown for a row.
+    Returns: (left_value, right_value) or (None, None)
     """
     # Setup
     curses.curs_set(0)
@@ -121,12 +131,11 @@ def _dual_pane_picker(stdscr, left_data, right_data, title):
         stdscr.addstr(0, 0, f"{title}", curses.color_pair(4) | curses.A_BOLD)
         
         # Instructions
-        instr = "[Arrows] Move/Switch  [Space] Select  [Enter] Confirm Pair  [Q] Cancel"
-        stdscr.addstr(1, 0, instr, curses.color_pair(3) | curses.A_DIM)
+        stdscr.addstr(1, 0, instructions, curses.color_pair(3) | curses.A_DIM)
         
         col_w = (width // 2) - 2
         
-        header_str = f"{'TARGET (Bad)':<{col_w}} | {'REFERENCE (Good)':<{col_w}}"
+        header_str = f"{headers[0]:<{col_w}} | {headers[1]:<{col_w}}"
         stdscr.addstr(3, 0, header_str, curses.color_pair(5) | curses.A_BOLD)
         stdscr.addstr(4, 0, "-" * (width-1), curses.color_pair(3) | curses.A_DIM)
         list_h = height - 6
@@ -146,9 +155,7 @@ def _dual_pane_picker(stdscr, left_data, right_data, title):
             # Left Column
             idx = l_offset + i
             if idx < len(left_data):
-                orig_idx, time_ms, text = left_data[idx]
-                ts = f"[{time_ms//60000:02d}:{(time_ms%60000)//1000:02d}]"
-                display_text = f"{ts} {text}"
+                display_text = row_text(left_data[idx])
                 
                 # Truncate
                 if len(display_text) > col_w - 4:
@@ -171,9 +178,7 @@ def _dual_pane_picker(stdscr, left_data, right_data, title):
             # Right Column
             idx = r_offset + i
             if idx < len(right_data):
-                orig_idx, time_ms, text = right_data[idx]
-                ts = f"[{time_ms//60000:02d}:{(time_ms%60000)//1000:02d}]"
-                display_text = f"{ts} {text}"
+                display_text = row_text(right_data[idx])
                 
                 if len(display_text) > col_w - 4:
                     display_text = display_text[:col_w - 7] + "..."

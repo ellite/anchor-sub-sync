@@ -13,7 +13,7 @@ SUPPORTED_EXTENSIONS = {".srt", ".ass", ".vtt", ".sub"}
 
 # Tasks that never touch torch / whisperx / ctranslate2. These skip engine setup
 # entirely so they don't pay the ~2s ML import cost.
-LIGHT_TASKS = {"download", "container", "burn", "clean_fix", "convert"}
+LIGHT_TASKS = {"download", "container", "burn", "clean_fix", "convert", "framerate"}
 
 
 def _resolve_task(args):
@@ -119,6 +119,9 @@ def _run_light_task(task, args, config):
     elif task == "convert":
         from .core.convert.convert import run_convert
         run_convert(args, _cached_device(config), console)
+    elif task == "framerate":
+        from .core.framerate.framerate import run_framerate
+        run_framerate(args, console)
 
 
 def _run_heavy_task(task, args, config):

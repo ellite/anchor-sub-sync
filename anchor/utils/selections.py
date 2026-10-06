@@ -25,13 +25,14 @@ def select_run_mode():
         {"id": "1", "icon": "🔊", "name": "Audio Sync", "desc": "Automatic Sync via Whisper", "req": ["ffmpeg"]},
         {"id": "2", "icon": "📑", "name": "Reference Sync", "desc": "Automatic Sync using a perfectly timed reference subtitle", "req": []},
         {"id": "3", "icon": "📍", "name": "Point Sync", "desc": "Sync via reference Subtitle", "req": []},
-        {"id": "4", "icon": "🔤", "name": "Translate", "desc": "Translate subtitle text to another language", "req": []},
-        {"id": "5", "icon": "📝", "name": "Transcribe", "desc": "Generate subtitles from video/audio", "req": ["ffmpeg"]},
-        {"id": "6", "icon": "📦", "name": "Container Tasks", "desc": "Extract, Embed, or Strip subtitles from media", "req": ["ffmpeg", "ffprobe"]},
-        {"id": "7", "icon": "🔥", "name": "Burn-in", "desc": "Permanently burn subtitles into video", "req": ["ffmpeg"]},
-        {"id": "8", "icon": "🧽", "name": "Clean & Fix", "desc": "Repair and clean subtitle files", "req": []},
-        {"id": "9", "icon": "🔄", "name": "Convert", "desc": "Convert between subtitle formats", "req": []},
-        {"id": "10", "icon": "📥", "name": "Download", "desc": "Automatically find and download matching subtitles", "req": []},
+        {"id": "4", "icon": "🎥", "name": "Change Frame Rate", "desc": "Retime a subtitle from one frame rate to another (e.g. 23.976 to 25)", "req": []},
+        {"id": "5", "icon": "🔤", "name": "Translate", "desc": "Translate subtitle text to another language", "req": []},
+        {"id": "6", "icon": "📝", "name": "Transcribe", "desc": "Generate subtitles from video/audio", "req": ["ffmpeg"]},
+        {"id": "7", "icon": "📦", "name": "Container Tasks", "desc": "Extract, Embed, or Strip subtitles from media", "req": ["ffmpeg", "ffprobe"]},
+        {"id": "8", "icon": "🔥", "name": "Burn-in", "desc": "Permanently burn subtitles into video", "req": ["ffmpeg"]},
+        {"id": "9", "icon": "🧽", "name": "Clean & Fix", "desc": "Repair and clean subtitle files", "req": []},
+        {"id": "10", "icon": "🔄", "name": "Convert", "desc": "Convert between subtitle formats", "req": []},
+        {"id": "11", "icon": "📥", "name": "Download", "desc": "Automatically find and download matching subtitles", "req": []},
     ]
 
     valid_choices = []
@@ -80,13 +81,14 @@ def select_run_mode():
         "1": "audio",
         "2": "reference",
         "3": "point",
-        "4": "translate",
-        "5": "transcribe",
-        "6": "container",
-        "7": "burn",
-        "8": "clean_fix",
-        "9": "convert",
-        "10": "download",
+        "4": "framerate",
+        "5": "translate",
+        "6": "transcribe",
+        "7": "container",
+        "8": "burn",
+        "9": "clean_fix",
+        "10": "convert",
+        "11": "download",
     }
     
     return mapping.get(choice)
