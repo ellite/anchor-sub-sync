@@ -93,6 +93,21 @@ def parse_arguments():
     )
     
     parser.add_argument(
+        "--from-fps",
+        type=float,
+        metavar="FPS",
+        help="For unattended frame rate change (use with -s and --to-fps): the frame rate the subtitle was made for, e.g. 23.976.",
+        default=None
+    )
+    parser.add_argument(
+        "--to-fps",
+        type=float,
+        metavar="FPS",
+        help="For unattended frame rate change (use with -s and --from-fps): the frame rate of the video, e.g. 25.",
+        default=None
+    )
+
+    parser.add_argument(
         "--missing",
         action="store_true",
         help="Skip video files (or languages) that already have a matching subtitle on disk.",

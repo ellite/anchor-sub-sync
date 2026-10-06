@@ -423,6 +423,8 @@ You can override the automatic hardware detection or control specific settings u
 | --video | -v | For unattended sync, provide path to the video file if the script fails to auto-match |
 | --overwrite | -o | Will overwrite the synced subtitle instead of saving it as file.synced.srt |
 | --help | -h  | Show the help message and exit. |
+| --from-fps | | For unattended frame rate change (with `-s` and `--to-fps`): the frame rate the subtitle was made for, e.g. `23.976`. |
+| --to-fps | | For unattended frame rate change (with `-s` and `--from-fps`): the frame rate of your video, e.g. `25`. |
 | --language | -l | For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation or download |
 | --download | -d | For unattended mode, automatically download subtitles. Provide -v with the video file path, or anchor downloads subtitles for all videos in the directory. |
 
@@ -464,6 +466,12 @@ Run unattended reference sync:
 ```bash
 anchor -s A.3.Minutes.Example.Video.en.srt -r A.3.Minutes.Example.Video.pt.srt 
 ```
+Change a subtitle's frame rate (for example a subtitle made for 23.976 fps that must match a 25 fps video):
+
+```bash
+anchor -s A.3.Minutes.Example.Video.en.srt --from-fps 23.976 --to-fps 25
+```
+
 Run unattended translation:
 
 ```bash

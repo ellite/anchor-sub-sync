@@ -20,6 +20,8 @@ def _resolve_task(args):
     """Maps CLI args to a task name, or returns None for interactive selection."""
     if args.api:
         return "api"
+    if args.from_fps is not None or args.to_fps is not None:
+        return "framerate"
     if args.subtitle:
         if args.video:
             return "audio"
