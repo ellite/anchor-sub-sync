@@ -541,7 +541,7 @@ def zone_quality_score(segs):
 
 def repair_zone_best(model, device, compute_type, audio_path, zone_segments, repair_padding, language, cpu_threads=0, whisper_model=None):
     """Re-transcribes a zone. `model` is the model name; pass an already loaded faster-whisper `whisper_model` to
-    avoid loading it again for every zone (about 14 s each for large-v3). The caller then owns its lifetime."""
+    avoid loading it again for every zone (about 2 s each for large-v3; the decoding attempts dominate a zone's cost). The caller then owns its lifetime."""
     core_start = float(zone_segments[0]["start"])
     core_end = float(zone_segments[-1]["end"])
     start = max(0.0, core_start - repair_padding)
