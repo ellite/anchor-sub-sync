@@ -1,5 +1,6 @@
 import pysubs2
 import difflib
+import itertools
 import numpy as np
 from rich.console import Console
 from .formatting import clean_text
@@ -10,6 +11,21 @@ MIN_DURATION_MS = 600
 GAP_MS = 50                  
 OUTLIER_THRESHOLD_SEC = 1.5
 STRAY_MATCH_SEC = 0.5        # reference mode: matched words implying starts this close agree
+EDGE_FIT_ANCHORS = 10        # audio mode: anchors at each end used to read the drift trend there (0 = constant shift)
+EDGE_MIN_ANCHORS = 4         # fewer anchors than this give no trustworthy trend
+EDGE_MIN_SPAN_SEC = 20.0     # anchor pairs closer than this give a noisy slope
+BLOCK_TREND_MIN_ANCHORS = 5  # audio mode: a block needs this many anchors to follow a drift trend inside it ...
+BLOCK_TREND_MIN_SPAN_SEC = 20.0  # ... and to span at least this long; shorter blocks keep a single median shift
+BLOCK_TREND_MIN_PAIR_SEC = 5.0   # anchor pairs closer than this give a noisy slope
+BLOCK_TREND_MAX_SLOPE = 0.1  # |drift change| per second of media inside a block
+EDGE_MAX_SLOPE = 0.1         # |drift change| per second of media, i.e. 10%
+EDGE_MAX_EXTRA_SEC = 6.0     # most the trend may add on top of the edge anchor's shift
+SLOW_SEGMENT_SEC = 5.5       # Whisper timing filter: a segment this long ...
+SLOW_SEGMENT_MAX_WPS = 0.6   # ... carrying fewer words per second than this is a timestamp collapse, not speech
+FAST_SEGMENT_MIN_WORDS = 3   # a segment with at least this many words ...
+FAST_SEGMENT_MAX_WPS = 8.0   # ... faster than this cannot be real speech
+DENSE_WINDOW_SEC = 3.0       # more words than DENSE_MAX_WPS per second inside this window ...
+DENSE_MAX_WPS = 7.5          # ... is also a collapse (Whisper squeezing a long scene into a few seconds)
 WEAK_DRIFT_TOL_SEC = 5.0      # reference mode: max distance of a weak match from the strong anchors' drift curve
 STRONG_MATCH_WORDS = 4       # reference mode: a cue with at least this many matched words ...
 STRONG_MATCH_RATIO = 0.6     # ... covering this share of its words skips the drift outlier filter
@@ -18,30 +34,117 @@ STRONG_MATCH_RATIO = 0.6     # ... covering this share of its words skips the dr
 console = Console()
 
 def smooth_offsets_by_block(anchors):
+    """Audio mode: gives each anchor the shift of its block ("scene": anchors less than SCENE_GAP_SEC apart).
+
+    Whisper times wobble by a few tenths of a second from word to word, so anchors are not used one by
+    one. A short block gets the median shift of its anchors. A long block (BLOCK_TREND_MIN_ANCHORS anchors
+    over BLOCK_TREND_MIN_SPAN_SEC) follows a straight line through its anchors' shifts (median of pairwise
+    slopes, robust to a few bad anchors), because the real drift keeps changing inside a long block and one
+    median would push the start of the block late and the end early.
+    """
     if not anchors: return []
-    console.print("[dim]   ⚖️ Applying Block Averaging (Smoothing)...[/dim]")
-    
+    console.print("[dim]   ⚖️ Applying Block Smoothing (median / trend)...[/dim]")
+
     scenes = []
     current_scene = [anchors[0]]
-    
+
     for i in range(1, len(anchors)):
         prev = anchors[i-1]
         curr = anchors[i]
-        
+
         if (curr['orig_start'] - prev['orig_start']) > SCENE_GAP_SEC:
             scenes.append(current_scene)
             current_scene = []
         current_scene.append(curr)
     scenes.append(current_scene)
-    
+
     smoothed = []
     for scene in scenes:
-        drifts = [(a['raw_match_time'] - a['orig_start']) for a in scene]
-        avg_drift = np.median(drifts)
+        xs = np.array([a['orig_start'] for a in scene])
+        drifts = np.array([a['raw_match_time'] - a['orig_start'] for a in scene])
+        median_drift = float(np.median(drifts))
+
+        line = None
+        if len(scene) >= BLOCK_TREND_MIN_ANCHORS and xs[-1] - xs[0] >= BLOCK_TREND_MIN_SPAN_SEC:
+            slopes = [(drifts[j] - drifts[i]) / (xs[j] - xs[i])
+                      for i, j in itertools.combinations(range(len(scene)), 2)
+                      if xs[j] - xs[i] >= BLOCK_TREND_MIN_PAIR_SEC]
+            if slopes:
+                slope = float(np.clip(np.median(slopes), -BLOCK_TREND_MAX_SLOPE, BLOCK_TREND_MAX_SLOPE))
+                line = (slope, float(np.median(drifts - slope * xs)))
+
         for a in scene:
-            a['final_start'] = a['orig_start'] + avg_drift
+            shift = line[0] * a['orig_start'] + line[1] if line else median_drift
+            a['final_start'] = a['orig_start'] + shift
             smoothed.append(a)
     return smoothed
+
+def drop_implausible_timing(whisper_data):
+    """Remove Whisper output whose timing cannot be real speech, so it never becomes an anchor.
+
+    WhisperX sometimes collapses a long, loud scene: one segment spanning ~25 s for 6 words, followed
+    by every later line squeezed into ~2 s. Those words match subtitle cues at the wrong time. Dropped:
+    segments with a speaking rate below SLOW_SEGMENT_MAX_WPS (when long) or above FAST_SEGMENT_MAX_WPS,
+    and words inside any DENSE_WINDOW_SEC window denser than DENSE_MAX_WPS.
+    Returns (filtered_data, dropped_word_count). The input is not modified.
+    """
+    def n_words(seg):
+        ws = seg.get('words') or []
+        return len(ws) if ws else len(clean_text(seg.get('text', '')).split())
+
+    # 1) segment-level rate rules
+    kept = []
+    dropped = 0
+    for seg in whisper_data:
+        n = n_words(seg)
+        dur = max(float(seg['end']) - float(seg['start']), 1e-3)
+        wps = n / dur
+        if (dur >= SLOW_SEGMENT_SEC and wps < SLOW_SEGMENT_MAX_WPS) or \
+           (n >= FAST_SEGMENT_MIN_WORDS and wps > FAST_SEGMENT_MAX_WPS):
+            dropped += n
+        else:
+            kept.append(seg)
+
+    # 2) word-level density: words inside an over-dense window
+    starts = sorted(w['start'] for seg in kept for w in (seg.get('words') or []) if 'start' in w)
+    limit = DENSE_MAX_WPS * DENSE_WINDOW_SEC
+    dense = set()
+    lo = hi = 0
+    half = DENSE_WINDOW_SEC / 2
+    for i, t in enumerate(starts):
+        while starts[lo] < t - half: lo += 1
+        while hi < len(starts) and starts[hi] <= t + half: hi += 1
+        if hi - lo > limit:
+            dense.add(t)
+    if not dense:
+        return kept, dropped
+
+    out = []
+    for seg in kept:
+        words = seg.get('words') or []
+        if not words:
+            out.append(seg)
+            continue
+        good = [w for w in words if w.get('start') not in dense]
+        dropped += len(words) - len(good)
+        if good:
+            new = dict(seg)
+            new['words'] = good
+            out.append(new)
+    return out, dropped
+
+def edge_drift_slope(edge_anchors):
+    """Drift trend (seconds of drift per second of media) read from the anchors at one end of the
+    timeline: the median slope between anchor pairs, which tolerates a few bad anchors. 0.0 when
+    there is not enough spread to trust it."""
+    if EDGE_FIT_ANCHORS <= 0 or len(edge_anchors) < EDGE_MIN_ANCHORS:
+        return 0.0
+    pts = [(a['orig_start'], a['raw_match_time'] - a['orig_start']) for a in edge_anchors]
+    slopes = [(d2 - d1) / (x2 - x1) for (x1, d1), (x2, d2) in itertools.combinations(pts, 2)
+              if x2 - x1 >= EDGE_MIN_SPAN_SEC]
+    if not slopes:
+        return 0.0
+    return float(np.clip(np.median(slopes), -EDGE_MAX_SLOPE, EDGE_MAX_SLOPE))
 
 def anchor_exactly(anchors):
     """Reference mode: an anchor takes the reference time as measured. There is nothing to average,
@@ -126,6 +229,11 @@ class GlobalAligner:
     def _is_strong(matched, cue_words):
         """A cue is confidently placed when enough of its words were found, in order, in the reference."""
         return matched >= STRONG_MATCH_WORDS and matched >= STRONG_MATCH_RATIO * cue_words
+
+    @staticmethod
+    def _edge_extra(slope, distance):
+        """Shift added past the end anchor: the trend times the distance to it, capped."""
+        return float(np.clip(slope * distance, -EDGE_MAX_EXTRA_SEC, EDGE_MAX_EXTRA_SEC))
 
     def _match_end(self, matches, cue_words):
         """Reference mode: the reference cue end when our cue's last matched word is also the last
@@ -243,6 +351,13 @@ class GlobalAligner:
         
         xp = [a['orig_start'] for a in anchors]
         fp = [a['final_start'] for a in anchors]
+        # Beyond the first/last anchor the shift follows the local drift trend instead of staying
+        # constant. A constant shift is wrong when the drift is still changing there (audio mode only:
+        # reference anchors are dense and exact).
+        head_slope = tail_slope = 0.0
+        if not self.reference:
+            head_slope = edge_drift_slope(raw_anchors[:EDGE_FIT_ANCHORS])
+            tail_slope = edge_drift_slope(raw_anchors[-EDGE_FIT_ANCHORS:])
         anchor_by_idx = {a['idx']: a for a in anchors} if self.reference else {}
         to_ms = (lambda t: int(round(max(0, t) * 1000))) if self.reference else (lambda t: int(max(0, t) * 1000))
         
@@ -256,10 +371,10 @@ class GlobalAligner:
             elif len(anchors) > 0:
                 if i < anchors[0]['idx']:
                     shift = anchors[0]['final_start'] - anchors[0]['orig_start']
-                    new_start = orig + shift
+                    new_start = orig + shift + self._edge_extra(head_slope, orig - anchors[0]['orig_start'])
                 elif i > anchors[-1]['idx']:
                     shift = anchors[-1]['final_start'] - anchors[-1]['orig_start']
-                    new_start = orig + shift
+                    new_start = orig + shift + self._edge_extra(tail_slope, orig - anchors[-1]['orig_start'])
                 else:
                     new_start = np.interp(orig, xp, fp)
             else:

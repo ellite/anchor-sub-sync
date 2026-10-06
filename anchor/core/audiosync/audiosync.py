@@ -198,7 +198,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
         start_time = time.time()
         try:
             # Step 1: Transcribe
-            whisper_data, detected_lang = run_whisper_transcription(vid, device, compute_type, batch_size, current_model, meta_lang)
+            whisper_data, detected_lang = run_whisper_transcription(vid, device, compute_type, batch_size, current_model, meta_lang, model_name=target_model, cpu_threads=cpu_threads)
 
             if whisper_data is None:
                 failed_count += 1

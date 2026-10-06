@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 from .ui import make_ui_console, CaptureProgress
 from .files import open_subtitle, backup_if_needed
-from .alignment import GlobalAligner
+from .alignment import GlobalAligner, drop_implausible_timing
 
 console = Console()
 
@@ -49,8 +49,48 @@ def load_whisper_model(device, compute_type, language, model_size="large-v3"):
 
     return model
 
-def run_whisper_transcription(video_path, device, compute_type, batch_size, model, language=None):
-    """Transcribes audio and aligns phonemes. Returns (whisper_data, detected_lang) or (None, None) on failure."""
+def repair_suspicious_segments(segments, video_path, model_name, device, compute_type, language, cpu_threads=0):
+    """Re-transcribes zones where Whisper's output looks broken (same detector and repair as the
+    transcribe task: long segments with little text, dragging or flat timing, run-on text).
+
+    WhisperX batches 30 s VAD chunks; in loud scenes a chunk can come back with only its first
+    sentence and a timestamp spanning the whole chunk. faster-whisper on the padded zone usually
+    recovers the missing speech. Two passes (small then large padding), a repair is kept only when
+    its quality score beats the original. Returns (segments, suspicious_zone_count, repaired_count).
+    """
+    from ..core.transcribe import transcribe as T
+
+    segs = [dict(s) for s in segments]
+    zone_count = repaired = 0
+    for padding in (T.REPAIR_PADDING_PASS_1, T.REPAIR_PADDING_PASS_2):
+        suspicious = [i for i, seg in enumerate(segs) if T.is_suspicious(seg, i, segs)]
+        if not suspicious:
+            break
+        zones = T.merge_suspicious_zones(suspicious)
+        if padding == T.REPAIR_PADDING_PASS_1:
+            zone_count = len(zones)
+        for z_start, z_end in reversed(zones):
+            bad = segs[z_start:z_end + 1]
+            original = [dict(s, text=T.clean_text(s.get("text", ""))) for s in bad if T.clean_text(s.get("text", ""))]
+            fixed = T.repair_zone_best(model_name, device, compute_type, video_path, bad, padding, language, cpu_threads)
+            if T.zone_quality_score(fixed) > T.zone_quality_score(original) + 0.3:
+                final = fixed
+                repaired += 1
+            else:
+                final = original
+            segs[z_start:z_end + 1] = final
+            first, last = z_start, z_start + len(final) - 1
+            segs = T.stitch_boundaries(segs, first, last)
+            segs = T.dedupe_window(segs, first, last)
+        segs = T.cleanup_redundancies(segs)
+    return segs, zone_count, repaired
+
+
+def run_whisper_transcription(video_path, device, compute_type, batch_size, model, language=None, model_name=None, cpu_threads=0):
+    """Transcribes audio and aligns phonemes. Returns (whisper_data, detected_lang) or (None, None) on failure.
+
+    model_name (the Whisper model size) enables the repair pass for suspicious zones; without it that pass is skipped.
+    """
     safe_console = Console(force_terminal=True)
     try:
         audio = whisperx.load_audio(str(video_path))
@@ -124,6 +164,16 @@ def run_whisper_transcription(video_path, device, compute_type, batch_size, mode
     detected_lang = result.get("language", "unknown")
     console.print(f"[dim]📝 Transcription complete. [bold cyan]Detected language: {detected_lang.upper()}[/bold cyan][/dim]")
 
+    if model_name and result["segments"]:
+        try:
+            segments, zones, repaired = repair_suspicious_segments(
+                result["segments"], video_path, model_name, device, compute_type, detected_lang, cpu_threads)
+            result["segments"] = segments
+            if zones:
+                console.print(f"[dim]🔧 Repair pass: {zones} suspicious zone(s), {repaired} repaired.[/dim]")
+        except Exception as e:
+            console.print(f"[yellow]⚠️ Repair pass failed ({e}). Using the original transcription.[/yellow]")
+
     # Align Phonemes
     with Progress(
         SpinnerColumn(),
@@ -161,6 +211,10 @@ def run_whisper_transcription(video_path, device, compute_type, batch_size, mode
         {'start': seg['start'], 'end': seg['end'], 'text': seg['text'], 'words': seg.get('words', [])}
         for seg in segments
     ]
+
+    whisper_data, dropped = drop_implausible_timing(whisper_data)
+    if dropped:
+        console.print(f"[dim]🧹 Ignored {dropped} words with implausible timing.[/dim]")
 
     return whisper_data, detected_lang
 
