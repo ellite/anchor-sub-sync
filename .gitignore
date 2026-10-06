@@ -211,3 +211,16 @@ __marimo__/
 A.*.Minute*
 testscripts/
 A.*.Example.Video.*
+
+# Common AI agent files
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.claude/
+.cursor/
+.cursorrules
+.windsurfrules
+.clinerules
+.aider*
+.codex/
+.github/copilot-instructions.md
