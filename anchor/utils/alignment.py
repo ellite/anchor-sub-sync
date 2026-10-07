@@ -175,9 +175,9 @@ def anchor_exactly(anchors):
     return anchors
 
 def enforce_strict_spacing(subs, gap_ms=GAP_MS, min_duration_ms=MIN_DURATION_MS):
-    console.print("[dim]   🧹 Running Zipper (Overlap Cleanup)...[/dim]")
+    console.print("[dim]   🧹 Running Zipper (Overlap and Gap Cleanup)...[/dim]")
     subs.sort()
-    fix_count = 0
+    overlaps = tight_gaps = 0
     
     for i in range(1, len(subs)):
         prev = subs[i-1]
@@ -185,6 +185,12 @@ def enforce_strict_spacing(subs, gap_ms=GAP_MS, min_duration_ms=MIN_DURATION_MS)
         required_start = prev.end + gap_ms
         
         if required_start > curr.start:
+            # A real overlap (the previous cue runs into this one) is not the same as two cues that merely sit
+            # closer than the minimum gap, which is normal for tightly timed subtitles (30 ms gaps are common).
+            if prev.end > curr.start:
+                overlaps += 1
+            else:
+                tight_gaps += 1
             new_prev_end = curr.start - gap_ms
             prev_duration = new_prev_end - prev.start
             
@@ -195,9 +201,11 @@ def enforce_strict_spacing(subs, gap_ms=GAP_MS, min_duration_ms=MIN_DURATION_MS)
                 curr.end = curr.start + curr_dur
             else:
                 prev.end = new_prev_end
-            fix_count += 1
             
-    console.print(f"[dim]      ➡️ 🔧 Resolved {fix_count} overlaps.[/dim]")
+    message = f"Resolved {overlaps} overlap{'s' if overlaps != 1 else ''}"
+    if gap_ms > 0:
+        message += f", trimmed {tight_gaps} cue end{'s' if tight_gaps != 1 else ''} to keep a {gap_ms} ms gap"
+    console.print(f"[dim]      ➡️ 🔧 {message}.[/dim]")
     return subs
 
 class GlobalAligner:
