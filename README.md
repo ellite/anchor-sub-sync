@@ -14,14 +14,16 @@
 
 # ⚓ Anchor Sub Sync
 
-**Anchor** is a GPU-accelerated tool that automatically synchronizes subtitle files (.srt, .ass) to video files using audio alignment. It uses OpenAI's Whisper (via WhisperX) to listen to the video track, applies some alignment techniques and perfectly align every subtitle line.
+**Anchor** is a GPU-accelerated tool that automatically synchronizes subtitle files (.srt, .ass) to video files using audio alignment. It uses OpenAI's Whisper (via WhisperX), or optionally NVIDIA's Parakeet, to listen to the video track, applies some alignment techniques and perfectly aligns every subtitle line.
 
 
 ⚡ Core Capabilities
 
-- 🔊 **Audio Sync**: Auto-align subtitles to video using Whisper (no reference text needed).
-- 📑 **Reference Sync**: Automatic Sync using a perfectly timed reference subtitle
+- 🔊 **Audio Sync**: Auto-align subtitles to video using Whisper, or the optional Parakeet engine (no reference text needed).
+- 📑 **Reference Sync**: Automatic Sync using a perfectly timed reference subtitle. Pair a whole season in one screen.
 - 📍 **Point Sync**: Fix linear drift by matching distinct lines against a reference subtitle.
+- 🎥 **Change Frame Rate**: Retime a subtitle from one frame rate to another (e.g. 23.976 to 25), from a picker or with `--from-fps` / `--to-fps`.
+- 🩺 **Sync Check**: Find out whether a subtitle is in sync, offset or drifting, and optionally fix it. Changes nothing unless you ask.
 - 🌐 **Translation**: Context-aware translation using NLLB, with dual-speaker preservation and auto-formatting.
 - 📝 **Transcriptions**: Generate subtitles directly from the video.
 - 📦 **Container Tasks**: Extract, Embed, or Strip subtitles from media
@@ -122,7 +124,7 @@ The API server is configured via `~/.anchor/config.json`:
 ```json
 "api_server": {
     "host": "127.0.0.1",
-    "port": 6060,
+    "port": 5000,
     "idle_timeout_seconds": 60
 }
 ```
@@ -137,7 +139,7 @@ The API server is configured via `~/.anchor/config.json`:
 
 1. In Subtitle Edit, open **Auto-translate** (Video → Auto-translate).
 2. In the engine dropdown, select **thammegowda-nllb-serve**.
-3. Set the URL to `http://<host>:<port>/translate` (e.g. `http://192.168.2.195:6060/translate` if accessing from another machine).
+3. Set the URL to `http://<host>:<port>/translate` (e.g. `http://192.168.1.50:5000/translate` if accessing from another machine).
 4. Select your source and target languages and click **Translate**.
 
 > ⚠️ If running Anchor on a different machine than Subtitle Edit, make sure to set `host` to `0.0.0.0` in the config.
@@ -192,13 +194,13 @@ Start-Process anchor --api -WindowStyle Hidden
 
 ## How It Works - Under the Hood
 
-A short summary: Anchor uses WhisperX plus a multi-stage elastic alignment pipeline (phoneme alignment, global fuzzy alignment, rolling-window drift correction, and timeline interpolation) to produce millisecond-accurate subtitle sync.
+A short summary: Anchor listens to the video with WhisperX (or the optional Parakeet engine), matches the subtitle's words to what was said, and places every line from those matches (phoneme alignment, global word alignment, drift correction and timeline interpolation) to produce millisecond-accurate subtitle sync.
 
-- **Transcription:** WhisperX for high-quality transcripts + forced alignment.
+- **Transcription:** WhisperX for high-quality transcripts + forced alignment, or Parakeet for accurate word times.
 - **Phoneme Alignment:** Maps audio to phonemes for word-level timing.
-- **Global Alignment:** Fuzzy matching to find anchors between script and audio.
-- **Drift Correction:** Rolling-window filter to correct long-term drift.
-- **Cleanup:** Interpolation + overlap-fixer ("Zipper") for clean subtitles.
+- **Global Alignment:** Matches the script's words to the spoken words even when lines were added, cut or repeated, and tolerates names spelled differently, to find anchors.
+- **Drift Correction:** Well-matched lines are trusted on their own; single-word matches must agree with the drift of the strong ones, and the drift trend is followed through long scenes and at both ends.
+- **Cleanup:** Interpolation for lines without a match + overlap-fixer ("Zipper") for clean subtitles.
 
 <details>
 <summary>Full explanation (expand)</summary>
@@ -225,17 +227,17 @@ Once transcription is complete, the custom syncing pipeline merges the provided 
 
 Standard tools fail here because they look for a 1:1 match.
 
-This tool performs a "fuzzy match" global alignment, mathematically calculating the best fit between the two datasets even when the word counts differ.
+This tool performs a global alignment, mathematically calculating the best fit between the two datasets even when the word counts differ. Names the recogniser spells differently (it hears "Vanetti" for "Venetti") are matched to the script's spelling, while look-alike words ("three" and "these") are kept apart.
 
-🔍 Rolling Window Drift Filter: Over a long video, audio timing can "drift" (often due to frame rate conversions like 23.976fps vs 24fps). This step analyzes the timeline in moving segments to detect and correct gradual desynchronization before it becomes noticeable to the viewer.
+🔍 Drift Filter: Over a long video, audio timing can "drift" (often due to frame rate conversions like 23.976fps vs 24fps). A line whose words are mostly found, in order, is trusted as it is. A line matched by only a word or two must agree with the drift its well-matched neighbours show, so one stray word cannot drag a line off. Inside a long scene the drift keeps changing, so it is followed instead of averaged away.
 
 ⚓️ Valid Anchors (e.g., 618 Anchors): The system identifies "Anchors"-points of absolute certainty where the audio and text match perfectly with high confidence.
 
 Rejection: It automatically discards "Outliers" (matches that seem statistically unlikely or erroneous), ensuring the timeline is pinned down only by high-quality data.
 
-🔨 Reconstructing Timeline (Interpolation): Using the Anchors as fixed distinct points, the system mathematically "stretches" or "compresses" the text between them. This ensures that the dialogue between the perfect matches flows naturally and stays in sync.
+🔨 Reconstructing Timeline (Interpolation): Using the Anchors as fixed points, lines without a match of their own are placed between their neighbours' shifts, and every line keeps its original duration. This ensures that the dialogue between the perfect matches flows naturally and stays in sync.
 
-🧹 Running The Zipper (Overlap Cleanup): Subtitle overlaps are messy and hard to read. "The Zipper" is a final polish pass that detects when two subtitle events collide. It dynamically adjusts the start/end times to ensure one line finishes exactly as the next one begins, resolving conflicts automatically.
+🧹 Running The Zipper (Overlap Cleanup): Subtitle overlaps are messy and hard to read. "The Zipper" is a final polish pass that detects when two subtitle events collide. It trims the earlier line so there are at least 50 ms between them (and never shorter than 600 ms), resolving conflicts automatically.
 
 Why use this over other tools?
 Most tools treat subtitles as a static block of text. This system treats them as a dynamic, elastic timeline. By using Phoneme-level anchoring combined with Drift Correction, the tool can sync messy, imperfect scripts to audio with a precision that manual matching simply cannot achieve.
@@ -294,6 +296,8 @@ anchor --translation-model OpenNMT/nllb-200-1.3B-ct2-int8
 And ensure you have enough disk space for model downloads.
 
 ## ⚡ Performance Test with model large-v3
+
+*These figures were measured on an earlier version, before the repair pass for suspicious Whisper segments and before the optional Parakeet engine. Current times differ, mainly with `--asr`; a 44-minute episode with Parakeet takes roughly 1.5 to 2.5 minutes including the repair of missed lines.*
 
 - GPU (NVIDIA RTX 2000E): synced a 44-minute episode in ~82 seconds.
 - CPU (Intel i5-12600H): synced the same 44-minute episode in ~16 minutes.
@@ -364,7 +368,7 @@ export LD_LIBRARY_PATH=$(python3 -c 'import os; import nvidia.cublas.lib; import
 This means you have a mismatch between PyTorch and TorchVision (usually one is CPU and one is GPU). Fix it by forcing a reinstall:
 
 ```bash
-pip install --force-reinstall torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cu121](https://download.pytorch.org/whl/cu121)
+pip install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
 ### "Numpy is not compatible"
@@ -421,14 +425,20 @@ You can override the automatic hardware detection or control specific settings u
 | --subtitle | -s | Runs unattended sync on a single subtitle file (provide path to .srt, .ass, etc.) |
 | --reference | -r | For unattended sync, provide reference subtitle file path for reference sync |
 | --video | -v | For unattended sync, provide path to the video file if the script fails to auto-match |
-| --overwrite | -o | Will overwrite the synced subtitle instead of saving it as file.synced.srt |
+| --overwrite | -o | Replace existing files. Without it Anchor never overwrites anything: a taken output name gets a counter (`file.synced.1.srt`). With it the original subtitle (for Embed and Strip, the original video) is replaced. |
+| --backup | -B | With `-o`: keep a `.bak` copy of the original first (an older `.bak` is never replaced). |
 | --help | -h  | Show the help message and exit. |
+| --version | -V | Show the version and exit. |
+| --cpu | | Force CPU execution, bypassing GPU detection. |
+| --check-hardware | | Re-run hardware detection and refresh the cached profile. |
+| --api | | Start the local translation API server (see API Mode). |
 | --check | | With `-s`: only check whether the subtitle is in sync with its video (nothing is written; exit code 3 when it is not). See [Sync Check](#-sync-check) below. |
 | --fix | | With `--check`: act on the advice without asking. Subtitles in sync are skipped, a suggested frame rate change is applied (after verifying it), otherwise Audio Sync runs. |
 | --from-fps | | For unattended frame rate change (with `-s` and `--to-fps`): the frame rate the subtitle was made for, e.g. `23.976`. |
 | --to-fps | | For unattended frame rate change (with `-s` and `--from-fps`): the frame rate of your video, e.g. `25`. |
 | --language | -l | For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation or download |
 | --download | -d | For unattended mode, automatically download subtitles. Provide -v with the video file path, or anchor downloads subtitles for all videos in the directory. |
+| --missing | | With `-d`: only download what is missing. A video that already has a subtitle for a requested language (`<video>.<lang>*.srt` next to it) is skipped for that language, and skipped entirely when none is left. |
 
 Examples
 --------
@@ -478,7 +488,7 @@ Change a subtitle's frame rate (for example a subtitle made for 23.976 fps that 
 anchor -s A.3.Minutes.Example.Video.en.srt --from-fps 23.976 --to-fps 25
 ```
 
-The result is saved next to the original and named after the new frame rate (`A.3.Minutes.Example.Video.en.25fps.srt`), so it never replaces the output of a sync. With `-o` the original is overwritten instead.
+From the menu (Change Frame Rate) you pick the subtitle files and then the From and To rates in a side-by-side picker. The result is saved next to the original and named after the new frame rate (`A.3.Minutes.Example.Video.en.25fps.srt`), so it never replaces the output of a sync. With `-o` the original is overwritten instead.
 
 Anchor never overwrites a file it did not just create. If the output name is taken, a counter is added (`Movie.en.synced.srt`,
 then `Movie.en.synced.1.srt`, `.2.` and so on); this covers every task, including the videos made by Embed, Strip and Burn-in
@@ -513,6 +523,12 @@ Run unattended download for all files for specific languages:
 
 ```bash
 anchor -d -l en,fr
+```
+
+Download Portuguese subtitles only for the videos that do not have one yet:
+
+```bash
+anchor -d -l pt --missing
 ```
 
 ## 🩺 Sync Check
@@ -566,11 +582,10 @@ AMD GPUs the CPU build is used (about 41 s per five minutes of audio). Delete `~
 Run the tests (about 2 seconds, no GPU or models needed) with `pip install -e ".[dev]"` then `python -m pytest`. They pin the choices
 that keep the sync accurate, so a failure means you changed one on purpose or by accident; see `tests/README.md`.
 
-
 To modify the code locally:
 
 ```bash
-git clone [https://github.com/ellite/anchor-sub-sync.git](https://github.com/ellite/anchor-sub-sync.git)
+git clone https://github.com/ellite/anchor-sub-sync.git
 cd anchor-sub-sync
 pip install -e .
 ```
