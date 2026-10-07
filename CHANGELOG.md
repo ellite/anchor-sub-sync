@@ -2,6 +2,59 @@
 
 
 
+## v2.0.0 (2026-10-07)
+
+### Breaking
+
+* feat!: v2 ([`90cbbbf`](https://github.com/ellite/anchor-sub-sync/commit/90cbbbfd80cc843faeddd4afb58545d1fdf7cb2c))
+
+### Chore
+
+* chore: ignore common AI agent files ([`a5411e4`](https://github.com/ellite/anchor-sub-sync/commit/a5411e48a1d570d2f4e76ccd710dc7a3f9aad040))
+
+### Documentation
+
+* docs: correct the faster-whisper model load cost in the repair_zone_best docstring ([`cb4f073`](https://github.com/ellite/anchor-sub-sync/commit/cb4f073fa9f1f74a5712f879bbd18c0265eee28d))
+
+### Feature
+
+* feat: pair many targets with references in one side-by-side numbered picker for reference sync ([`4c3d16d`](https://github.com/ellite/anchor-sub-sync/commit/4c3d16dc017957bd2add3aeda1436f8597a24ba8))
+
+* feat: Sync Check task reports whether a subtitle is in sync, offset or drifting, with --check and --fix ([`68af559`](https://github.com/ellite/anchor-sub-sync/commit/68af5597416a5984bfd780adaa7fa1336c1a726e))
+
+* feat: name frame rate outputs after the target rate so they never replace a sync result ([`ddcd853`](https://github.com/ellite/anchor-sub-sync/commit/ddcd8532ecdbb11cb61b44f2d2eef70590899120))
+
+* feat: unattended frame rate change with --from-fps and --to-fps ([`63bfe30`](https://github.com/ellite/anchor-sub-sync/commit/63bfe30a6ae8c9ba9c9d64a523a533fbaa0363fb))
+
+* feat: change frame rate task with a from and to picker ([`7ca5d3f`](https://github.com/ellite/anchor-sub-sync/commit/7ca5d3ffd659467b42591a24381a07f6369e1847))
+
+* feat: optional Parakeet speech recognition engine for audio sync (--asr) with targeted gap repair and progress bars ([`c11d97c`](https://github.com/ellite/anchor-sub-sync/commit/c11d97ce5ab081bf1569be02fdd6a4d8297c64a7))
+
+* feat: audio sync follows drift inside long blocks and at the edges and re-transcribes suspicious zones ([`02c6367`](https://github.com/ellite/anchor-sub-sync/commit/02c6367a80b3f17458822c7a2db7fe18b5d9ea69))
+
+* feat: reference sync anchors cues on exact reference timestamps and prints anchor count ([`46f1894`](https://github.com/ellite/anchor-sub-sync/commit/46f1894e24db0cc09269f73ea4ba493d4c472e1b))
+
+### Fix
+
+* fix: never overwrite an existing file unless -o is set, numbering new outputs .1., .2. ([`a09cf60`](https://github.com/ellite/anchor-sub-sync/commit/a09cf601e03dbb796c2f89b6918105dea788141b))
+
+* fix: respell near-miss names and follow each cue&#39;s own match with Parakeet ([`f1d2f07`](https://github.com/ellite/anchor-sub-sync/commit/f1d2f073f1b05df0e1bf1471c23a48cca94f60e1))
+
+* fix: refuse .sub files in the frame rate task and show the first cue ([`9515157`](https://github.com/ellite/anchor-sub-sync/commit/95151576490f80378b90c3af9e0630408ecb6e9b))
+
+* fix: report real overlaps and trimmed gaps separately in the zipper message ([`5f18a1a`](https://github.com/ellite/anchor-sub-sync/commit/5f18a1a46114c308058bb63c76857dd21ce59b66))
+
+* fix: transcription no longer starts a cue at a stretched first word, clamp the first cue and remove unused helpers ([`fe9d7a8`](https://github.com/ellite/anchor-sub-sync/commit/fe9d7a85613a900eb07dc7d4eff8a3b98c85ade6))
+
+* fix: sync translated subtitles in memory and handle failed translation in reference and point sync ([`6289458`](https://github.com/ellite/anchor-sub-sync/commit/628945860b557bc15b0ba94359b10f7595fff016))
+
+* fix: oom when switching between translation and transcribing models ([`65265c4`](https://github.com/ellite/anchor-sub-sync/commit/65265c4145df83e1bbb9dd7c12ff10a9d789b196))
+
+### Test
+
+* test: add a strict unit test suite pinning the sync choices, with a mutation check ([`a2af855`](https://github.com/ellite/anchor-sub-sync/commit/a2af855247a402f38ad823bac8f28d0fb91d87ae))
+
+
 ## v1.17.0 (2026-09-08)
 
 ### Feature
