@@ -5,7 +5,7 @@ from .common import get_filtered_lines, apply_linear_correction
 from ...utils.languages import get_subtitle_language
 from ...utils.mappings import get_language_code_for_nllb
 from ..translation import translate_subtitle_nllb
-from ...utils.files import open_subtitle, backup_if_needed
+from ...utils.files import open_subtitle, backup_if_needed, unique_path
 
 console = Console()
 
@@ -111,7 +111,7 @@ def run_auto_linear_sync(target_file, reference_file, device="cpu", model_id="Ju
             output_path = target_file
             console.print(f"[dim]💾 Overwriting original subtitle: {output_path.name}[/dim]")
         else:
-            output_path = target_file.with_suffix(".synced.srt")
+            output_path = unique_path(target_file.with_suffix(".synced.srt"))
 
         sub_target.save(str(output_path))
         console.print(f"💾 Saved to: [underline]{output_path.name}[/underline]")

@@ -4,6 +4,7 @@ import re
 import time
 from pathlib import Path
 import pysubs2
+from ...utils.files import resolve_output
 from PIL import Image
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 
@@ -198,7 +199,7 @@ def extract_subtitle_images(file_path: Path, temp_dir: str, console):
 
     return extracted_data
 
-def run_ocr_engine(file_path: Path, target_ext: str, console, device: str):
+def run_ocr_engine(file_path: Path, target_ext: str, console, device: str, args=None):
     """Handles extracting images from binary subtitle formats and running OCR."""
     easyocr = _load_easyocr()
     if easyocr is None:
@@ -297,7 +298,7 @@ def run_ocr_engine(file_path: Path, target_ext: str, console, device: str):
                 progress.advance(task)
 
         # --- Save Output ---
-        output_path = file_path.with_suffix(target_ext)
+        output_path = resolve_output(file_path.with_suffix(target_ext), args)
         subs.save(str(output_path))
         
         # --- STOP FILE TIMER AND FORMAT ---

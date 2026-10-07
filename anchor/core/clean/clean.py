@@ -1,5 +1,5 @@
 from ...utils.files import get_files, select_files_interactive, _run_curses_picker
-from ...utils.files import open_subtitle, backup_if_needed
+from ...utils.files import open_subtitle, backup_if_needed, unique_path
 from .operations import remove_sdh, strip_tags, remove_empty_cues, fix_overlaps, remove_watermarks, fix_capitalization
 
 def run_clean_fix(args, console):
@@ -98,7 +98,7 @@ def run_clean_fix(args, console):
             backup_if_needed(sub_path, args)
             output_path = sub_path
         else:
-            output_path = sub_path.with_name(f"{sub_path.stem}.cleaned{sub_path.suffix}")
+            output_path = unique_path(sub_path.with_name(f"{sub_path.stem}.cleaned{sub_path.suffix}"))
             
         # Save the cleaned subtitle back to disk
         edit_subs.save(str(output_path))

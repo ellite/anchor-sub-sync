@@ -1,7 +1,8 @@
 import subprocess
 from pathlib import Path
 import shutil
-from ...utils.files import select_files_interactive, get_files, _run_curses_picker
+import os
+from ...utils.files import select_files_interactive, get_files, _run_curses_picker, unique_path, resolve_output
 from ...utils.languages import get_subtitle_language
 from ...utils.container import get_subtitle_streams
 from ...utils.mappings import normalize_language_code, ISO_639_MAPPING, get_iso_639_2_code
@@ -17,6 +18,17 @@ def run_container_tasks(args, container_mode, console):
         console.print(f"[bold red]❌ Unknown container task: {container_mode}[/bold red]")
         return
     
+
+def _free_name(path, companion=False):
+    """First free `<stem>.N<ext>` (or `path` itself). With `companion`, the same stem with a .sub extension must be free too:
+    mkvextract writes a .sub next to every .idx."""
+    path = Path(path)
+    candidate, counter = path, 1
+    while os.path.lexists(candidate) or (companion and os.path.lexists(candidate.with_suffix(".sub"))):
+        candidate = path.with_name(f"{path.stem}.{counter}{path.suffix}")
+        counter += 1
+    return candidate
+
 
 def run_extract(args, console):
     console.print("\n[bold cyan]🧲 Running Extract Task[/bold cyan]\n")
@@ -124,7 +136,7 @@ def run_extract(args, console):
             elif not is_text:
                 modifier = f".track_{idx}"
 
-            temp_file = Path(f"temp_extract_{idx}{ext}")
+            temp_file = _free_name(Path(f"temp_extract_{idx}{ext}"), companion=(ext == ".idx"))
             
             # --- EXECUTE EXTRACTION ---
             console.print(f" 🔧  Extracting Track {idx}...")
@@ -160,14 +172,11 @@ def run_extract(args, console):
             lang = normalize_language_code(lang)
 
             # --- Final Naming & Conflict Resolution ---
-            final_name = f"{base_name}.{lang}{modifier}{ext}"
-            final_path = cwd / final_name
-            
-            counter = 1
-            while final_path.exists():
-                final_name = f"{base_name}.{lang}{modifier}.{counter}{ext}"
-                final_path = cwd / final_name
-                counter += 1
+            # Never replaces a file that is already there (Movie.en.srt, then Movie.en.1.srt ...) unless -o is set.
+            final_path = cwd / f"{base_name}.{lang}{modifier}{ext}"
+            if not (args is not None and getattr(args, "overwrite", False)):
+                final_path = _free_name(final_path, companion=(ext == ".idx"))
+            final_name = final_path.name
 
             temp_file.rename(final_path)
             console.print(f" 💾 Saved to: [u]{final_name}[/u]")
@@ -226,7 +235,10 @@ def run_embed(args, console):
     is_mp4 = target_media.suffix.lower() == ".mp4"
 
     # Build the FFmpeg Command
-    temp_output = target_media.with_name(f".temp_embed_{target_media.name}")
+    temp_output = unique_path(target_media.with_name(f".temp_embed_{target_media.name}"))
+    # The muxed file is a NEW file (Movie.embedded.mkv) unless -o is set; then it replaces the original.
+    replace_original = bool(args is not None and getattr(args, "overwrite", False))
+    final_media = target_media if replace_original else unique_path(target_media.with_name(f"{target_media.stem}.embedded{target_media.suffix}"))
     
     cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(target_media)]
     for sub in selected_subs:
@@ -272,11 +284,11 @@ def run_embed(args, console):
     console.print(" 🎬 Muxing tracks losslessly (this takes a few seconds)...")
     try:
         subprocess.run(cmd, check=True)
-        # Safely overwrite the original file
         if temp_output.exists():
-            temp_output.replace(target_media)
+            temp_output.replace(final_media)
         
-        console.print(f" 💾 Saved to: [u]{target_media.name}[/u] [dim](Overwritten)[/dim]")
+        note = "(Overwritten)" if replace_original else "(new file, the original is untouched)"
+        console.print(f" 💾 Saved to: [u]{final_media.name}[/u] [dim]{note}[/dim]")
         console.print("\n[bold green]✨ Embed Complete![/bold green]")
         
     except subprocess.CalledProcessError:
@@ -339,7 +351,9 @@ def run_strip(args, console):
             continue
 
         # Build the Negative Map FFmpeg Command
-        temp_output = media_path.with_name(f".temp_strip_{media_path.name}")
+        temp_output = unique_path(media_path.with_name(f".temp_strip_{media_path.name}"))
+        replace_original = bool(args is not None and getattr(args, "overwrite", False))
+        final_media = media_path if replace_original else unique_path(media_path.with_name(f"{media_path.stem}.stripped{media_path.suffix}"))
         cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(media_path)]
         
         # Start by mapping EVERYTHING from the original file
@@ -359,9 +373,10 @@ def run_strip(args, console):
         try:
             subprocess.run(cmd, check=True)
             if temp_output.exists():
-                temp_output.replace(media_path)
+                temp_output.replace(final_media)
             
-            console.print(f" 💾 Saved to: [u]{media_path.name}[/u] [dim](Overwritten)[/dim]")
+            note = "(Overwritten)" if replace_original else "(new file, the original is untouched)"
+            console.print(f" 💾 Saved to: [u]{final_media.name}[/u] [dim]{note}[/dim]")
         except subprocess.CalledProcessError:
             console.print(f" ❌ [bold red]FFmpeg Error during strip.[/bold red]")
             if temp_output.exists():

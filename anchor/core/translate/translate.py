@@ -3,7 +3,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
-from ...utils.files import select_files_interactive, open_subtitle, get_files
+from ...utils.files import select_files_interactive, open_subtitle, get_files, resolve_output
 from ...utils.languages import get_subtitle_language
 from ...utils.mappings import get_language_code_for_nllb
 from ..translation import translate_subtitle_nllb
@@ -108,7 +108,7 @@ def run_translation(args, device, translation_model, compute_type, console: Cons
                 else:
                     new_stem = f"{new_stem}.{target_lang_input}"
 
-                output_path = path.with_name(f"{new_stem}{path.suffix}")
+                output_path = resolve_output(path.with_name(f"{new_stem}{path.suffix}"), args)
                 
                 translated_sub.save(str(output_path))
                 console.print(f"[bold green]✅ Done in {duration:.1f}s![/bold green] Saved to: [underline]{output_path.name}[/underline]")

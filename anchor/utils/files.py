@@ -1,3 +1,4 @@
+import os
 import re
 import curses
 import pysubs2
@@ -11,6 +12,21 @@ VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".flv", ".webm"}
 def get_files(extensions):
     return sorted([f for f in Path.cwd().iterdir() if f.suffix.lower() in extensions], key=lambda f: f.name)
 
+def _strip_counter(name):
+    """Drops the `.1` that unique_path adds (Movie.en.synced.1 -> Movie.en.synced), but only after a token Anchor itself writes:
+    a bare trailing number can be part of a title (Blade.Runner.2049, Die.Hard.2)."""
+    from .mappings import ISO_639_MAPPING
+    match = re.match(r'^(.*)\.(\d{1,2})$', name)
+    if not match:
+        return name
+    before = match.group(1)
+    previous = before.rsplit('.', 1)[-1].lower()
+    codes = set(ISO_639_MAPPING.keys()) | set(ISO_639_MAPPING.values())
+    if previous in {"synced", "sync", "hi", "ai", "forced"} or previous in codes or re.search(r'\.\d+(?:\.\d+)?fps$', before, re.IGNORECASE):
+        return before
+    return name
+
+
 def find_best_video_match(sub_path):
     """
     Smart matching: Handles language codes (Movie.en.srt -> Movie.mp4)
@@ -19,7 +35,7 @@ def find_best_video_match(sub_path):
     token_re = re.compile(r'(?:\.(?:[a-z]{2,3}(?:-[a-z]{2})?|synced|sync|hi|ai|\d+(?:\.\d+)?fps))$', flags=re.IGNORECASE)
     
     while True:
-        new_name = token_re.sub('', clean_name)
+        new_name = token_re.sub('', _strip_counter(clean_name))
         if new_name == clean_name:
             break
         clean_name = new_name
@@ -36,9 +52,31 @@ def find_best_video_match(sub_path):
             
     return None
 
+def unique_path(path) -> Path:
+    """`path` itself when nothing is there, else the first free `<stem>.N<ext>`: Movie.en.synced.srt -> Movie.en.synced.1.srt.
+
+    Anchor never overwrites a file it did not just create unless the user passes -o. Every output goes through this
+    (or `resolve_output`), including videos and backups.
+    """
+    path = Path(path)
+    if not os.path.lexists(path):
+        return path
+    counter = 1
+    while True:
+        candidate = path.with_name(f"{path.stem}.{counter}{path.suffix}")
+        if not os.path.lexists(candidate):
+            return candidate
+        counter += 1
+
+
+def resolve_output(path, args=None) -> Path:
+    """Where a derived output goes: exactly `path` when -o allows replacing what is there, else the first free name."""
+    return Path(path) if args is not None and getattr(args, "overwrite", False) else unique_path(path)
+
+
 def backup_if_needed(path: Path, args) -> None:
     if args and getattr(args, "backup", False) and path.exists():
-        path.rename(path.with_suffix(path.suffix + ".bak"))
+        path.rename(unique_path(path.with_suffix(path.suffix + ".bak")))     # an older backup is never replaced
 
 def open_subtitle(path: Path, **kwargs) -> pysubs2.SSAFile:
     """

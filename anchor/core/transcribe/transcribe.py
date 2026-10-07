@@ -26,7 +26,7 @@ logging.getLogger("pyannote").setLevel(logging.ERROR)
 logging.getLogger("whisperx").setLevel(logging.ERROR)
 logging.getLogger("faster_whisper").setLevel(logging.ERROR)
 
-from ...utils.files import select_files_interactive, get_files
+from ...utils.files import select_files_interactive, get_files, unique_path, resolve_output
 from ...utils.alignment import quiet_library_logs
 from ...utils.languages import get_audio_language
 
@@ -848,7 +848,7 @@ def run_transcription(args, device, model_size, compute_type, console: Console, 
         if args.overwrite:
             output_path = input_path.with_name(f"{input_path.stem}.{lang_suffix}.srt")
         else:
-            output_path = input_path.with_name(f"{input_path.stem}.{lang_suffix}.ai.srt")
+            output_path = unique_path(input_path.with_name(f"{input_path.stem}.{lang_suffix}.ai.srt"))
 
         console.print(f"   📥 Input:  [cyan]{input_path.name}[/cyan]")
         console.print(f"   💾 Output: [cyan]{output_path.name}[/cyan]")

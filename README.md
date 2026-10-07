@@ -480,6 +480,11 @@ anchor -s A.3.Minutes.Example.Video.en.srt --from-fps 23.976 --to-fps 25
 
 The result is saved next to the original and named after the new frame rate (`A.3.Minutes.Example.Video.en.25fps.srt`), so it never replaces the output of a sync. With `-o` the original is overwritten instead.
 
+Anchor never overwrites a file it did not just create. If the output name is taken, a counter is added (`Movie.en.synced.srt`,
+then `Movie.en.synced.1.srt`, `.2.` and so on); this covers every task, including the videos made by Embed, Strip and Burn-in
+(`Movie.embedded.mkv`, `Movie.stripped.mkv`, `Movie.burn.mkv`) and `.bak` backups. Only `-o` replaces files: with it the original
+subtitle (or, for Embed and Strip, the original video) is overwritten, and `-B` keeps a `.bak` copy first.
+
 Check whether a subtitle is in sync (nothing is written):
 
 ```bash

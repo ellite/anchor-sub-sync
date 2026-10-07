@@ -1,6 +1,6 @@
 from pathlib import Path
 from ...utils.selections import select_target_format
-from ...utils.files import open_subtitle
+from ...utils.files import open_subtitle, resolve_output
 from ...utils.files import select_files_interactive
 from .image_subtitles import run_ocr_engine
 
@@ -62,7 +62,7 @@ def run_convert(args, device, console):
                 console.print(f"   [yellow]⚠️ Image-based subtitle detected ({file_ext.upper()}). Routing to OCR engine...[/yellow]")
                 
                 # TODO: This is where we will plug in the OCR function!
-                run_ocr_engine(file_path, target_ext, console, device)
+                run_ocr_engine(file_path, target_ext, console, device, args)
                 
                 continue
 
@@ -71,7 +71,7 @@ def run_convert(args, device, console):
             subs = open_subtitle(file_path, keep_html_tags=True, keep_unknown_html_tags=True)
             
             # Construct the new filename
-            output_path = file_path.with_suffix(target_ext)
+            output_path = resolve_output(file_path.with_suffix(target_ext), args)
             
             # Save it! pysubs2 automatically formats the output based on the extension
             subs.save(str(output_path))

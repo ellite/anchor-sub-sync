@@ -3,18 +3,13 @@ import threading
 import queue
 from pathlib import Path
 
-from ...utils.files import get_files, find_best_video_match, select_video_fallback, select_files_interactive
+from ...utils.files import get_files, find_best_video_match, select_video_fallback, select_files_interactive, resolve_output
 from ...utils.video import get_video_info
 
 
-def _build_output_name(video_path: Path, suffix=".burn"):
-    base = video_path.stem
-    out = video_path.with_name(f"{base}{suffix}{video_path.suffix}")
-    counter = 1
-    while out.exists():
-        out = video_path.with_name(f"{base}{suffix}_{counter}{video_path.suffix}")
-        counter += 1
-    return out
+def _build_output_name(video_path: Path, suffix=".burn", args=None):
+    """Movie.mkv -> Movie.burn.mkv; Movie.burn.1.mkv, .2. ... when it exists (with -o the existing burn is replaced)."""
+    return resolve_output(video_path.with_name(f"{video_path.stem}{suffix}{video_path.suffix}"), args)
 
 
 def run_burn(args, device, console):
@@ -58,7 +53,7 @@ def run_burn(args, device, console):
         while not q.empty():
             sub, vid = q.get()
             console.print(f"\n🔥 Burning: [cyan]{sub.name}[/cyan] into [yellow]{vid.name}[/yellow]")
-            out_file = _build_output_name(vid)
+            out_file = _build_output_name(vid, args=args)
 
             # --- METADATA EXTRACTION ---
             console.print(" 🔍 Analyzing original video codec and quality...")

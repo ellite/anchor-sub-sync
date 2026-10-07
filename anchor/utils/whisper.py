@@ -7,7 +7,7 @@ import whisperx
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 from .ui import make_ui_console, CaptureProgress
-from .files import open_subtitle, backup_if_needed
+from .files import open_subtitle, backup_if_needed, unique_path
 from .alignment import GlobalAligner, drop_implausible_timing, quiet_library_logs
 
 console = Console()
@@ -267,7 +267,7 @@ def run_anchor_align_and_sync(sub_path, whisper_data, args=None, precise=False):
         output_path = sub_path
         console.print(f"[dim]💾 Overwriting original subtitle: {output_path.name}[/dim]")
     else:
-        output_path = sub_path.with_name(f"{sub_path.stem}.synced{sub_path.suffix}")
+        output_path = unique_path(sub_path.with_name(f"{sub_path.stem}.synced{sub_path.suffix}"))
 
     synced_subs.save(str(output_path))
 

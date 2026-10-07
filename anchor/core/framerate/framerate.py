@@ -2,7 +2,7 @@ import curses
 import sys
 from pathlib import Path
 
-from ...utils.files import get_files, select_files_interactive, open_subtitle, backup_if_needed
+from ...utils.files import get_files, select_files_interactive, open_subtitle, backup_if_needed, unique_path
 from ..pointsync.manual import _dual_pane_picker
 
 SUPPORTED_EXTENSIONS = {".srt", ".ass", ".vtt", ".sub"}
@@ -72,7 +72,7 @@ def _retime_file(path, from_fps, to_fps, from_label, to_label, args, console):
         else:
             # Named after the change, not ".synced": a frame rate change must never overwrite the result of an audio
             # or reference sync that uses that name. Movie.en.srt -> Movie.en.24fps.srt
-            output = path.with_name(f"{path.stem}.{to_label}fps{path.suffix}")
+            output = unique_path(path.with_name(f"{path.stem}.{to_label}fps{path.suffix}"))
         subs.save(str(output))
 
         console.print(f"\n[bold green]✅ {path.name}[/bold green]")

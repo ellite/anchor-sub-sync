@@ -5,7 +5,7 @@ from pathlib import Path
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, BarColumn, TaskProgressColumn
 
-from ...utils.files import get_files, open_subtitle, backup_if_needed
+from ...utils.files import get_files, open_subtitle, backup_if_needed, unique_path
 from ...utils.pairing import pick_pairs
 from ...utils.mappings import get_language_code_for_nllb
 from ...utils.languages import get_subtitle_language
@@ -182,7 +182,7 @@ def run_referencesync(args, device, translation_model, compute_type, console, cp
                 final_output_path = target_sub
                 console.print(f"[dim]💾 Overwriting original subtitle: {final_output_path.name}[/dim]")
             else:
-                final_output_path = target_sub.with_suffix(".synced.srt")
+                final_output_path = unique_path(target_sub.with_suffix(".synced.srt"))
 
             result_subs.save(str(final_output_path))
 
