@@ -30,7 +30,11 @@ FAST_SEGMENT_MAX_WPS = 8.0   # ... faster than this cannot be real speech
 DENSE_WINDOW_SEC = 3.0       # more words than DENSE_MAX_WPS per second inside this window ...
 DENSE_MAX_WPS = 7.5          # ... is also a collapse (Whisper squeezing a long scene into a few seconds)
 AUDIO_STRONG_ANCHORS = True   # audio mode: strong matches skip the neighbour-median drift filter too
-AUDIO_WEAK_DRIFT_TOL_SEC = 1.5  # audio mode: max distance of a weak match from the strong anchors' drift curve
+AUDIO_WEAK_DRIFT_TOL_SEC = 1.0  # audio mode: max distance of a weak match from the strong anchors' drift curve
+SNAP_MIN_LETTERS = 5         # audio mode: recognised words this long that the script lacks are snapped to a similar script word ...
+SNAP_MIN_SIMILARITY = 0.85   # ... when at least this similar (difflib ratio), so "Vanetti" matches "Venetti"
+LEADING_WORD_SEC = 0.3       # audio mode: a cue starts this long per unmatched word before its first matched word ...
+LEADING_WORD_MAX = 3         # ... for at most this many words
 WEAK_DRIFT_TOL_SEC = 5.0      # reference mode: max distance of a weak match from the strong anchors' drift curve
 STRONG_MATCH_WORDS = 4       # reference mode: a cue with at least this many matched words ...
 STRONG_MATCH_RATIO = 0.6     # ... covering this share of its words skips the drift outlier filter
@@ -54,7 +58,30 @@ def quiet_library_logs():
     finally:
         logging.disable(previous)
 
-def smooth_offsets_by_block(anchors):
+def smooth_offsets_by_block(anchors, precise=False):
+    """Gives each anchor its final shift. `precise` is for an engine whose word times are accurate (Parakeet).
+
+    precise=False (Whisper, whose word times wobble): block median or trend, see _smooth_block_trend.
+    precise=True: a strong anchor (many words matched) is trusted to the word: it starts exactly where its own match says.
+    The rest take the median shift of themselves and their two neighbouring anchors, which follows local changes without
+    being thrown by one stray word. Smoothing whole blocks to one line, as for Whisper, erased real cue-to-cue offsets of
+    up to 0.7 s (subtitles are rarely timed uniformly against the speech) and made some cues look "hit or miss".
+    """
+    if not anchors:
+        return []
+    if not precise:
+        return _smooth_block_trend(anchors)
+    console.print("[dim]   ⚖️ Applying Local Smoothing (strong anchors keep their own time)...[/dim]")
+    drifts = np.array([a['raw_match_time'] - a['orig_start'] for a in anchors])
+    for i, a in enumerate(anchors):
+        if a.get('strong'):
+            a['final_start'] = a['raw_match_time']
+        else:
+            a['final_start'] = a['orig_start'] + float(np.median(drifts[max(0, i - 1):i + 2]))
+    return anchors
+
+
+def _smooth_block_trend(anchors):
     """Audio mode: gives each anchor the shift of its block ("scene": anchors less than SCENE_GAP_SEC apart).
 
     Whisper times wobble by a few tenths of a second from word to word, so anchors are not used one by
@@ -209,7 +236,7 @@ def enforce_strict_spacing(subs, gap_ms=GAP_MS, min_duration_ms=MIN_DURATION_MS)
     return subs
 
 class GlobalAligner:
-    def __init__(self, original_subs, whisper_data, reference=False):
+    def __init__(self, original_subs, whisper_data, reference=False, precise=False):
         """
         reference=False: `whisper_data` is Whisper output (word times estimate speech onset).
         reference=True:  `whisper_data` is a trusted subtitle's events ({'text','start','end'}).
@@ -220,13 +247,23 @@ class GlobalAligner:
         self.subs = original_subs
         self.whisper = whisper_data
         self.reference = reference
+        self.precise = precise      # audio mode with an accurate engine (Parakeet): see smooth_offsets_by_block
+        self.match_info = {}        # cue index -> (position of its first matched word, that word's time, words matched)
         self.anchor_count = 0  # valid anchors found by the last run()
         self.anchored_idx = set()  # indices of the cues that anchored in the last run()
 
     def _match_start(self, matches):
         """Start time of a subtitle cue from its matched words, as (position in cue, token) pairs."""
         if not self.reference:
-            return matches[0][1]['start']
+            pos, tok = matches[0]
+            if pos == 0:
+                return tok['start']
+            # The words before the first matched one were not heard (or were heard differently): the cue starts
+            # before that word. Use the pace of the cue's own matched words when there are enough of them.
+            times = [t['start'] for _, t in matches]
+            gaps = [b - a for a, b in zip(times, times[1:]) if 0.05 < b - a < 1.0]
+            rate = float(np.median(gaps)) if len(gaps) >= 2 else LEADING_WORD_SEC
+            return tok['start'] - min(pos, LEADING_WORD_MAX) * rate
 
         # Reference cue boundaries are exact: if a match sits at the head of its reference cue,
         # use the cue start; otherwise back off by the words that precede it in our own cue.
@@ -275,6 +312,35 @@ class GlobalAligner:
             return tok['ev_end']
         return None
 
+    @staticmethod
+    def _snap_to_script(sub_tokens, wh_tokens):
+        """Respells recognised words that the subtitle does not contain onto its closest word.
+
+        Speech recognition spells names and rare words its own way ("Vanetti" for "Venetti"). The aligner only matches
+        identical words, so such a cue stayed unanchored and was placed by interpolation. Only longer words are
+        touched (SNAP_MIN_LETTERS) and only when very similar, so short look-alikes (than / that) never merge.
+        Returns how many words were respelled.
+        """
+        vocab = {t['word'] for t in sub_tokens if len(t['word']) >= SNAP_MIN_LETTERS}
+        if not vocab:
+            return 0
+        by_length = {}
+        for word in vocab:
+            by_length.setdefault(len(word), []).append(word)
+        chosen, changed = {}, 0
+        for token in wh_tokens:
+            word = token['word']
+            if len(word) < SNAP_MIN_LETTERS or word in vocab:
+                continue
+            if word not in chosen:
+                candidates = [v for n in range(len(word) - 2, len(word) + 3) for v in by_length.get(n, [])]
+                match = difflib.get_close_matches(word, candidates, n=1, cutoff=SNAP_MIN_SIMILARITY)
+                chosen[word] = match[0] if match else None
+            if chosen[word]:
+                token['word'] = chosen[word]
+                changed += 1
+        return changed
+
     def _tokenize_subs(self):
         sub_words = []
         for idx, sub in enumerate(self.subs):
@@ -306,6 +372,8 @@ class GlobalAligner:
         console.print("[dim]   🧩 Tokenizing data...[/dim]")
         sub_tokens = self._tokenize_subs()
         wh_tokens = self._tokenize_whisper()
+        if not self.reference:
+            self._snap_to_script(sub_tokens, wh_tokens)
         
         sub_strs = [x['word'] for x in sub_tokens]
         wh_strs = [x['word'] for x in wh_tokens]
@@ -322,6 +390,8 @@ class GlobalAligner:
                 cue_words[sub_token['sub_idx']] = sub_token['n']
                 sub_matches[sub_token['sub_idx']].append((sub_token['pos'], wh_tokens[match.b + i]))
 
+        self.match_info = {i: (m[0][0], m[0][1]['start'], len(m)) for i, m in sub_matches.items() if m}
+
         candidates = []
         for idx in range(len(self.subs)):
             if sub_matches[idx]:
@@ -332,6 +402,7 @@ class GlobalAligner:
                     'idx': idx, 'orig_start': sub.start/1000.0, 
                     'raw_match_time': match_start, 'drift': drift,
                     'end_time': self._match_end(sub_matches[idx], cue_words[idx]),
+                    'first_pos': sub_matches[idx][0][0],
                     'strong': (self.reference or AUDIO_STRONG_ANCHORS) and self._is_strong(len(sub_matches[idx]), cue_words[idx])
                 })
 
@@ -351,6 +422,15 @@ class GlobalAligner:
         if trusted:
             strong_x = [c['orig_start'] for c in strong]
             strong_drift = [c['drift'] for c in strong]
+            if not self.reference:
+                # A cue whose first words were not matched must not start later than the strong anchors' drift curve
+                # says: the missing words are spoken before the first one that matched ("Tape. Meat roll." matched on "roll").
+                for c in candidates:
+                    if not c['strong'] and c.get('first_pos', 0) > 0:
+                        curve_start = c['orig_start'] + float(np.interp(c['orig_start'], strong_x, strong_drift))
+                        if curve_start < c['raw_match_time']:
+                            c['raw_match_time'] = curve_start
+                            c['drift'] = curve_start - c['orig_start']
         
         for i, cand in enumerate(candidates):
             start_i = max(0, i - window_size)
@@ -375,7 +455,7 @@ class GlobalAligner:
         self.anchor_count = len(raw_anchors)
         self.anchored_idx = {a['idx'] for a in raw_anchors}
         
-        anchors = anchor_exactly(raw_anchors) if self.reference else smooth_offsets_by_block(raw_anchors)
+        anchors = anchor_exactly(raw_anchors) if self.reference else smooth_offsets_by_block(raw_anchors, precise=self.precise)
         
         console.print("[dim]   🔨 Reconstructing Timeline (Interpolation)...[/dim]")
         new_subs = pysubs2.SSAFile()
