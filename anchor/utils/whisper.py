@@ -243,6 +243,20 @@ def align_subtitles(subs, whisper_data, precise=False):
     return synced_subs, rejected, aligner.anchor_count
 
 
+def check_subtitles(subs, whisper_data, precise=False, video_fps=None):
+    """Measures how far `subs` is from the speech without changing it. Returns the dict from syncverdict.assess."""
+    from . import alignment
+    from .syncverdict import assess
+    aligner = GlobalAligner(subs, whisper_data, precise=precise)
+    was_quiet, alignment.console.quiet = alignment.console.quiet, True
+    try:
+        aligner.run()
+    finally:
+        alignment.console.quiet = was_quiet
+    duration = max((w['end'] for s in whisper_data for w in s.get('words', []) if w.get('end') is not None), default=None)
+    return assess(aligner.anchor_points, len(subs), duration, video_fps)
+
+
 def run_anchor_align_and_sync(sub_path, whisper_data, args=None, precise=False):
     """Runs GlobalAligner on pre-computed whisper data and saves the synced subtitle."""
     original_subs = open_subtitle(sub_path)

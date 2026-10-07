@@ -248,6 +248,8 @@ class GlobalAligner:
         self.whisper = whisper_data
         self.reference = reference
         self.precise = precise      # audio mode with an accurate engine (Parakeet): see smooth_offsets_by_block
+        self.anchor_points = []     # (original start, drift, strong) of every valid anchor, for the sync check
+        self.candidate_count = 0    # cues with at least one matched word
         self.match_info = {}        # cue index -> (position of its first matched word, that word's time, words matched)
         self.anchor_count = 0  # valid anchors found by the last run()
         self.anchored_idx = set()  # indices of the cues that anchored in the last run()
@@ -454,6 +456,8 @@ class GlobalAligner:
         console.print(f"[dim]   ⚓️ Valid Anchors: {len(raw_anchors)} (Rejected {rejected_count} outliers)[/dim]")
         self.anchor_count = len(raw_anchors)
         self.anchored_idx = {a['idx'] for a in raw_anchors}
+        self.anchor_points = [(a['orig_start'], a['raw_match_time'] - a['orig_start'], bool(a['strong'])) for a in raw_anchors]
+        self.candidate_count = len(candidates)
         
         anchors = anchor_exactly(raw_anchors) if self.reference else smooth_offsets_by_block(raw_anchors, precise=self.precise)
         

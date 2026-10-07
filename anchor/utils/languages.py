@@ -17,6 +17,18 @@ def get_audio_language(video_path: Path):
         return ISO_639_MAPPING.get(raw_lang, None)
     except Exception: return None
 
+def get_video_fps(video_path: Path):
+    """Frame rate of the first video stream (ffprobe avg_frame_rate, e.g. 24000/1001 -> 23.976...), or None."""
+    if shutil.which("ffprobe") is None: return None
+    try:
+        cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate", "-of",
+               "default=noprint_wrappers=1:nokey=1", str(Path(video_path).resolve())]
+        raw = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout.strip().splitlines()[0]
+        num, _, den = raw.partition("/")
+        fps = float(num) / float(den or 1)
+        return fps if fps > 0 else None
+    except Exception: return None
+
 def get_subtitle_language(sub_path: Path) -> str:
     """
     Detects the language of a subtitle file by analyzing its text content.

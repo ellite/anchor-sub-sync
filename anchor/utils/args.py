@@ -93,6 +93,20 @@ def parse_arguments():
     )
     
     parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Check whether a subtitle is in sync with its video (use with -s, and -v if the video is not found automatically). "
+             "Nothing is written; exit code 3 when the subtitle is not in sync.",
+        default=False
+    )
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="With --check: act on the advice without asking. Subtitles in sync are skipped, a suggested frame rate change is applied "
+             "(and verified, falling back to Audio Sync if it does not bring the subtitle in sync), otherwise Audio Sync is performed.",
+        default=False
+    )
+    parser.add_argument(
         "--from-fps",
         type=float,
         metavar="FPS",

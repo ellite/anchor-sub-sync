@@ -1,18 +1,76 @@
 import sys
 import time
 import gc
+import copy
 import torch
 from pathlib import Path
+from rich.prompt import Prompt
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, BarColumn, TaskProgressColumn
 from ...utils.files import get_files, find_best_video_match, select_video_fallback, open_subtitle, select_files_interactive, backup_if_needed
 from ...utils.mappings import get_language_code_for_nllb
-from ...utils.languages import get_audio_language, get_subtitle_language
-from ...utils.whisper import run_whisper_transcription, run_anchor_align_and_sync, align_subtitles, load_whisper_model
+from ...utils.languages import get_audio_language, get_subtitle_language, get_video_fps
+from ...utils.whisper import run_whisper_transcription, run_anchor_align_and_sync, align_subtitles, load_whisper_model, check_subtitles
+from ...utils import syncverdict
 from ...utils import parakeet
 from ..translation import translate_subtitle_nllb
 
 # Constants
 SUPPORTED_EXTENSIONS = {".srt", ".ass", ".vtt", ".sub"}
+
+def _offer_fix(console, result):
+    """After an interactive Sync Check: what to do about the finding. Returns 'framerate', 'audio' or None.
+
+    The frame rate change is offered only when the drift matches a frame rate pair; Audio Sync is always offered unless the
+    subtitle does not belong to this video (too few cues matched, so there is nothing to align).
+    """
+    verdict = result["verdict"]
+    if verdict in ("in_sync", "not_comparable"):
+        return None
+    options = []
+    if result.get("fps"):
+        options.append(("framerate", f"Change frame rate from {result['fps'][0]} to {result['fps'][1]} fps (keeps the subtitle as it is)"))
+    options.append(("audio", "Audio Sync (re-times every cue to the speech; reuses the transcription just made)"))
+    console.print("\n[bold]What now?[/bold]")
+    for i, (_, label) in enumerate(options, 1):
+        console.print(f"   [bold cyan]{i}.[/bold cyan] {label}")
+    console.print("   [bold cyan]n.[/bold cyan] Nothing, leave the subtitle as it is")
+    default = "n" if verdict == "loose" else "1"
+    choice = Prompt.ask("[bold]Choose[/bold]", choices=[str(i) for i in range(1, len(options) + 1)] + ["n"], default=default, show_choices=False)
+    return None if choice == "n" else options[int(choice) - 1][0]
+
+
+def _auto_fix_choice(console, result, target, whisper_data, precise, video_fps=None):
+    """Unattended `--check --fix`: takes the check's own advice. Returns 'framerate', 'audio' or None (nothing to do / cannot help).
+
+    A subtitle in sync is skipped. A suggested frame rate change (the check only suggests one when a single pair fits) is still tried on
+    a copy and checked again against the same transcription (about a second), and kept only when it brings the subtitle in sync;
+    otherwise Audio Sync is used.
+    """
+    verdict = result["verdict"]
+    if verdict in ("in_sync", "loose"):
+        console.print("[green]✅ Nothing to fix. Skipped.[/green]")
+        return None
+    if verdict == "not_comparable":
+        console.print("[yellow]⚠️ Cannot be fixed: the subtitle does not seem to belong to this video. Skipped.[/yellow]")
+        return None
+    if result.get("fps"):
+        from ..framerate.framerate import convert_frame_rate, resolve_rate
+        from_label, to_label = result["fps"]
+        _, from_fps = resolve_rate(float(from_label))
+        _, to_fps = resolve_rate(float(to_label))
+        trial = copy.deepcopy(target)
+        convert_frame_rate(trial, from_fps, to_fps)
+        after = check_subtitles(trial, whisper_data, precise=precise, video_fps=video_fps)
+        if after["verdict"] in ("in_sync", "loose"):
+            console.print(f"[green]🎥 Frame rate {from_label} to {to_label} fps brings it in sync "
+                          f"(checked again: average {after['median']:+.1f} s). Applying it.[/green]")
+            return "framerate"
+        console.print(f"[yellow]⚠️ Frame rate {from_label} to {to_label} fps would leave it "
+                      f"{syncverdict.LABELS[after['verdict']][1].lower()}. Using Audio Sync instead.[/yellow]")
+    else:
+        console.print("[dim]No frame rate explains it. Using Audio Sync.[/dim]")
+    return "audio"
+
 
 def run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console, cpu_threads=0):
     """
@@ -51,7 +109,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                 console.print(f"[dim]Please provide the video path explicitly using -v / --video[/dim]")
                 sys.exit(1)
 
-        console.print(f"[green]🚀 Unattended Mode:[/green] Syncing [cyan]{sub_path.name}[/cyan]")
+        console.print(f"[green]🚀 Unattended Mode:[/green] {'Checking' if getattr(args, 'check', False) else 'Syncing'} [cyan]{sub_path.name}[/cyan]")
         queue.append((sub_path, video_file))
 
 
@@ -90,7 +148,10 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
 
     # PROCESS QUEUE
     file_label = "file" if len(queue) == 1 else "files"
-    action = "Batch Sync" if len(queue) > 1 else "Sync"
+    check = bool(getattr(args, "check", False))      # Sync Check: measure and report, write nothing
+    check_results = []
+    performed_sync = False      # a check that went on into an audio sync
+    action = ("Batch Sync" if len(queue) > 1 else "Sync") if not check else ("Batch Sync Check" if len(queue) > 1 else "Sync Check")
     console.print(f"\n[bold green]🚀 Starting {action} ({len(queue)} {file_label})...[/bold green]")
     
     total_start = time.time()
@@ -290,9 +351,38 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                     console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {detected_lang.upper()}).[/dim]")
                     event_pairs = list(zip(original_sub_object, ghost_sub))
 
+            # Sync Check: compare and report. Unattended it stops there (nothing is written). Interactively the user may then
+            # apply the suggested frame rate change, or carry on into the audio sync with the transcription already made.
+            do_sync = not check
+            if check:
+                video_fps = get_video_fps(vid)
+                target = ghost_sub if (needs_translation and original_sub_object) else open_subtitle(sub)
+                result = check_subtitles(copy.deepcopy(target), whisper_data, precise=parakeet_used, video_fps=video_fps)   # the aligner retimes what it is given
+                check_results.append(result)
+                syncverdict.print_report(console, sub.name, result)
+                console.print(f"[dim]Checked in {time.time() - start_time:.1f}s.[/dim]")
+                if args.subtitle:
+                    choice = _auto_fix_choice(console, result, target, whisper_data, parakeet_used, video_fps) if getattr(args, "fix", False) else None
+                else:
+                    choice = _offer_fix(console, result)
+                if choice == "framerate":
+                    from ..framerate.framerate import _retime_file, resolve_rate
+                    from_label, from_fps = resolve_rate(float(result["fps"][0]))
+                    to_label, to_fps = resolve_rate(float(result["fps"][1]))
+                    if not _retime_file(sub, from_fps, to_fps, from_label, to_label, args, console):
+                        failed_count += 1
+                    continue
+                if choice == "audio":
+                    do_sync = performed_sync = True
+                    start_time = time.time()
+                else:
+                    console.print("[dim]No file was written.[/dim]")
+                    continue
+
             # Step 2b: Parakeet drops some short shouted lines. Re-transcribe (faster-whisper, loaded once) only the
             # windows where the subtitle has cues Parakeet did not hear.
-            if parakeet_used:
+            # (Skipped while only checking: a few more anchors do not change a verdict, and the repair is most of the run time.)
+            if parakeet_used and do_sync:
                 try:
                     target_subs = ghost_sub if (needs_translation and original_sub_object) else open_subtitle(sub)
                     whisper_data, zones, recovered = parakeet.repair_missing_speech(
@@ -346,7 +436,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
     
     # FINAL SUMMARY
     summary_color = "bold green" if failed_count == 0 else "bold yellow"
-    summary_label = "Batch Sync" if len(queue) > 1 else "Sync"
+    summary_label = ("Batch Sync" if len(queue) > 1 else "Sync") + (" Check" if check and not performed_sync else "")
     summary_text = f"✨ {summary_label} Complete in {total_duration:.1f}s"
     
     if failed_count > 0:
@@ -355,4 +445,12 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
         summary_color = "bold red" 
         
     console.print(f"\n[{summary_color}]{summary_text}[/{summary_color}]")
+
+    # A script can act on the result: exit code 3 when any checked subtitle is not in sync (unattended mode only).
+    # With --fix the fixable ones were fixed, so only a subtitle that cannot be compared is left over.
+    if check and args.subtitle and failed_count == 0:
+        left = [r for r in check_results if r["verdict"] == "not_comparable"] if getattr(args, "fix", False) else \
+               [r for r in check_results if r["verdict"] not in ("in_sync", "loose")]
+        if left:
+            sys.exit(3)
 

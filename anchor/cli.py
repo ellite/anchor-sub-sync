@@ -22,6 +22,11 @@ def _resolve_task(args):
         return "api"
     if args.from_fps is not None or args.to_fps is not None:
         return "framerate"
+    if args.fix and not args.check:
+        console.print("[bold red]❌ Error:[/bold red] --fix is used together with --check (anchor -s <subtitle> --check --fix).")
+        sys.exit(1)
+    if args.check and args.subtitle:
+        return "check"
     if args.subtitle:
         if args.video:
             return "audio"
@@ -141,8 +146,9 @@ def _run_heavy_task(task, args, config):
     if task == "api":
         from .api.api import run_apimode
         run_apimode(args, device, model_size, compute_type, batch_size, translation_model, console, config, cpu_threads)
-    elif task == "audio":
+    elif task in ("audio", "check"):
         from .core.audiosync.audiosync import run_audiosync
+        args.check = args.check or task == "check"      # Sync Check is the audio pipeline up to the alignment, then a report
         run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console, cpu_threads)
     elif task == "reference":
         from .core.referencesync.referencesync import run_referencesync

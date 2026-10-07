@@ -423,6 +423,8 @@ You can override the automatic hardware detection or control specific settings u
 | --video | -v | For unattended sync, provide path to the video file if the script fails to auto-match |
 | --overwrite | -o | Will overwrite the synced subtitle instead of saving it as file.synced.srt |
 | --help | -h  | Show the help message and exit. |
+| --check | | With `-s`: only check whether the subtitle is in sync with its video (nothing is written; exit code 3 when it is not). See [Sync Check](#-sync-check) below. |
+| --fix | | With `--check`: act on the advice without asking. Subtitles in sync are skipped, a suggested frame rate change is applied (after verifying it), otherwise Audio Sync runs. |
 | --from-fps | | For unattended frame rate change (with `-s` and `--to-fps`): the frame rate the subtitle was made for, e.g. `23.976`. |
 | --to-fps | | For unattended frame rate change (with `-s` and `--from-fps`): the frame rate of your video, e.g. `25`. |
 | --language | -l | For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation or download |
@@ -474,6 +476,12 @@ anchor -s A.3.Minutes.Example.Video.en.srt --from-fps 23.976 --to-fps 25
 
 The result is saved next to the original and named after the new frame rate (`A.3.Minutes.Example.Video.en.25fps.srt`), so it never replaces the output of a sync. With `-o` the original is overwritten instead.
 
+Check whether a subtitle is in sync (nothing is written):
+
+```bash
+anchor -s A.3.Minutes.Example.Video.en.srt -v A.3.Minutes.Example.Video.mkv --check
+```
+
 Run unattended translation:
 
 ```bash
@@ -497,6 +505,32 @@ Run unattended download for all files for specific languages:
 ```bash
 anchor -d -l en,fr
 ```
+
+## 🩺 Sync Check
+
+Menu entry 5, or `anchor -s <subtitle> [-v <video>] --check`. Anchor transcribes the audio, finds where each subtitle line is
+spoken and reads how the offset behaves over the whole video. It changes nothing and writes no file. The verdict is one of:
+
+| Verdict | Meaning | Suggested fix |
+| ------- | ------- | ------------- |
+| In sync / mostly in sync | Small offset everywhere | none |
+| Constant offset | One shift for the whole file, e.g. +3.1 s | shift, or Audio Sync |
+| Drifting | Starts right (or not) and the offset grows steadily | Change Frame Rate when the slope matches a pair such as 25 to 23.976, otherwise Audio Sync |
+| Out of sync (steps) | The offset changes in jumps: another cut, removed scenes, a partly synced file | Audio Sync or Reference Sync |
+| Not comparable | Too few lines found in the speech: wrong video, language or a damaged file | check the pairing |
+
+Run from the menu, it then offers what to do about the finding, using the transcription it just made: the suggested
+frame rate change, Audio Sync, or nothing. A frame rate change is suggested only when exactly one frame rate pair explains the drift
+(the video's own frame rate must be the target). Pairs that differ by 0.1%, like 23.976 to 25 and 24 to 25, cannot be told apart by
+measuring, so then Anchor says so and recommends Audio Sync instead of guessing. A subtitle that does not belong to the video
+(not comparable) gets no offer. Unattended (`--check`) it only reports. Add `--fix` to let it act on its own advice: `anchor -s movie.en.srt -v movie.mkv --check --fix`.
+Subtitles in sync are skipped; a suggested frame rate change is applied only after it has been checked again against the same
+transcription (if it does not bring the subtitle in sync, Audio Sync is performed instead); with no suggestion, Audio Sync is performed. A subtitle that does not belong
+to the video is skipped and gives exit code 3. Output files are named as usual (`.25fps.srt`, `.synced.srt`), never overwriting unless `-o` is given.
+
+A table shows the offset for eight equal parts of the video. Positive means the subtitle shows up early. It skips the
+gap repair of an audio sync, so it is faster (about 35 s for a 44-minute episode with Parakeet; Whisper takes longer), and it uses
+the same engine choice (`--asr`) and cross-language handling. In unattended mode the exit code is 3 when the subtitle is not in sync, so a script can react.
 
 ## 🦜 Parakeet engine (optional)
 
