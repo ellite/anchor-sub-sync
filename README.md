@@ -563,6 +563,10 @@ AMD GPUs the CPU build is used (about 41 s per five minutes of audio). Delete `~
 
 ## ⚙️ Development
 
+Run the tests (about 2 seconds, no GPU or models needed) with `pip install -e ".[dev]"` then `python -m pytest`. They pin the choices
+that keep the sync accurate, so a failure means you changed one on purpose or by accident; see `tests/README.md`.
+
+
 To modify the code locally:
 
 ```bash
