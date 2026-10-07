@@ -472,6 +472,8 @@ Change a subtitle's frame rate (for example a subtitle made for 23.976 fps that 
 anchor -s A.3.Minutes.Example.Video.en.srt --from-fps 23.976 --to-fps 25
 ```
 
+The result is saved next to the original and named after the new frame rate (`A.3.Minutes.Example.Video.en.25fps.srt`), so it never replaces the output of a sync. With `-o` the original is overwritten instead.
+
 Run unattended translation:
 
 ```bash

@@ -16,7 +16,7 @@ def find_best_video_match(sub_path):
     Smart matching: Handles language codes (Movie.en.srt -> Movie.mp4)
     """
     clean_name = sub_path.stem
-    token_re = re.compile(r'(?:\.(?:[a-z]{2,3}(?:-[a-z]{2})?|synced|sync|hi|ai))$', flags=re.IGNORECASE)
+    token_re = re.compile(r'(?:\.(?:[a-z]{2,3}(?:-[a-z]{2})?|synced|sync|hi|ai|\d+(?:\.\d+)?fps))$', flags=re.IGNORECASE)
     
     while True:
         new_name = token_re.sub('', clean_name)

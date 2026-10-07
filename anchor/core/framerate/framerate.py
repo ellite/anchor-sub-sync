@@ -70,7 +70,9 @@ def _retime_file(path, from_fps, to_fps, from_label, to_label, args, console):
             backup_if_needed(path, args)
             output = path
         else:
-            output = path.with_name(f"{path.stem}.synced{path.suffix}")
+            # Named after the change, not ".synced": a frame rate change must never overwrite the result of an audio
+            # or reference sync that uses that name. Movie.en.srt -> Movie.en.24fps.srt
+            output = path.with_name(f"{path.stem}.{to_label}fps{path.suffix}")
         subs.save(str(output))
 
         console.print(f"\n[bold green]✅ {path.name}[/bold green]")
