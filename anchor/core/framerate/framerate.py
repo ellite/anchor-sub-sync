@@ -51,12 +51,19 @@ def _timestamp(ms):
 
 def _retime_file(path, from_fps, to_fps, from_label, to_label, args, console):
     """Retimes one subtitle file and saves it. Returns True on success."""
+    if path.suffix.lower() == ".sub":
+        # MicroDVD stores frame numbers, not times, and names the frame rate in its first line. A player divides the
+        # frames by the video's own frame rate, so such a file already follows the video; stretching the frame numbers
+        # as well would apply the correction twice.
+        console.print(f"[bold red]❌ {path.name}:[/bold red] .sub (MicroDVD) files store frame numbers, which already follow the video's "
+                      "frame rate, so there is nothing to retime. Convert it to .srt first with the Convert task if you need to.")
+        return False
     try:
         subs = open_subtitle(path)
         if not len(subs):
             console.print(f"[yellow]⚠️ {path.name} has no cues. Skipped.[/yellow]")
             return True
-        last_before = subs[-1].start
+        first_before, last_before = subs[0].start, subs[-1].start
         factor = convert_frame_rate(subs, from_fps, to_fps)
 
         if args and getattr(args, "overwrite", False):
@@ -68,7 +75,8 @@ def _retime_file(path, from_fps, to_fps, from_label, to_label, args, console):
 
         console.print(f"\n[bold green]✅ {path.name}[/bold green]")
         console.print(f"   📐 Factor: [cyan]{factor:.6f}[/cyan] ({from_label} → {to_label} fps)")
-        console.print(f"   ⏱️  Last cue starts: [cyan]{_timestamp(last_before)}[/cyan] → [cyan]{_timestamp(subs[-1].start)}[/cyan]")
+        console.print(f"   ⏱️  First cue starts: [cyan]{_timestamp(first_before)}[/cyan] → [cyan]{_timestamp(subs[0].start)}[/cyan]")
+        console.print(f"   ⏱️  Last cue starts:  [cyan]{_timestamp(last_before)}[/cyan] → [cyan]{_timestamp(subs[-1].start)}[/cyan]")
         console.print(f"   💾 Saved to: [underline]{output.name}[/underline]")
         return True
     except Exception as e:
