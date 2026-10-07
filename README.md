@@ -463,6 +463,10 @@ Run unattended sync with the Parakeet engine (installs it on first use):
 anchor -s A.3.Minutes.Example.Video.en.srt -v A.3.Minutes.Example.Video.mkv --asr parakeet
 ```
 
+Interactive reference sync shows your subtitles in two panes, targets on the left and references on the right. Pick files with
+`Space`: each pick gets a number, and the target numbered 1 is synced to the reference numbered 1, and so on. `/` filters a pane by text
+(for example `.pt.`), `A` picks everything shown, so a whole season is: `/` `.pt.` `A`, `Right`, `/` `.en.` `A`, `Enter`.
+
 Run unattended reference sync:
 
 ```bash

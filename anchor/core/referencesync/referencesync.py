@@ -2,9 +2,11 @@ import sys
 import time
 import pysubs2
 from pathlib import Path
+from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, BarColumn, TaskProgressColumn
 
-from ...utils.files import get_files, open_subtitle, select_files_interactive, backup_if_needed
+from ...utils.files import get_files, open_subtitle, backup_if_needed
+from ...utils.pairing import pick_pairs
 from ...utils.mappings import get_language_code_for_nllb
 from ...utils.languages import get_subtitle_language
 from ..translation import translate_subtitle_nllb
@@ -45,35 +47,27 @@ def run_referencesync(args, device, translation_model, compute_type, console, cp
             console.print("[bold red]❌ No subtitle files found in the current directory.[/bold red]")
             return
 
-        while True:
-            # Prompt 1: The Target
-            console.print("\n[bold cyan]🎯 Step 1: Select TARGET Subtitle to be fixed[/bold cyan]")
-            target_selection = select_files_interactive(sub_files, header_lines=["Select Target Subtitle (to be synced):"], multi_select=False)
-            if not target_selection:
-                break # abort if user presses 'q'
-            target_path = target_selection[0]
+        if len(sub_files) < 2:
+            console.print("[bold red]❌ Reference sync needs at least two subtitles in the folder (a target and a reference).[/bold red]")
+            return
 
-            # Filter Target file from Reference list
-            remaining_subs = [s for s in sub_files if s != target_path]
-            if not remaining_subs:
-                console.print("[bold red]❌ No other subtitles left to act as a reference![/]")
-                break
+        console.print("\n[bold cyan]🎯 Pick the TARGET subtitles (left) and their REFERENCES (right)[/bold cyan]")
+        console.print("[dim]Each pick is numbered in the order you make it: pair 1 is the first target with the first reference, and so on. "
+                      "[A] selects a whole side in listing order, which pairs a season in two key presses.[/dim]")
+        pairs = pick_pairs(sub_files, sub_files)
+        if not pairs:
+            console.print("[yellow]No pairs selected. Returning to menu.[/yellow]")
+            return
+        queue.extend(pairs)
 
-            # Prompt 2: The Reference
-            console.print("\n[bold green]📑 Step 2: Select the perfectly timed REFERENCE Subtitle[/bold green]")
-            ref_selection = select_files_interactive(remaining_subs, header_lines=["Select Reference Subtitle (already synced):"], multi_select=False)
-            if not ref_selection:
-                break # abort if user presses 'q'
-            ref_path = ref_selection[0]
-
-            queue.append((target_path, ref_path))
-
-            # Asks if user wants to add additional syncs to the queue
-            choice = input("\n➕ Do you want to add another pair to the queue? (y/n): ")
-            if choice.lower() != 'y':
-                break
-
-        console.print(f"\n[bold green]✅ Queue built with {len(queue)} pairs. Starting sync...[/bold green]\n")
+        table = Table(box=None, show_header=True, header_style="bold", padding=(0, 1))
+        table.add_column("#", justify="right", style="dim")
+        table.add_column("Target", style="cyan", overflow="fold")
+        table.add_column("Reference", style="green", overflow="fold")
+        for n, (target_path, ref_path) in enumerate(queue, 1):
+            table.add_row(str(n), target_path.name, ref_path.name)
+        console.print(table)
+        console.print(f"\n[bold green]✅ Queue built with {len(queue)} pair{'s' if len(queue) != 1 else ''}. Starting sync...[/bold green]\n")
 
     if not queue:
         return
