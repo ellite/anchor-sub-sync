@@ -19,20 +19,21 @@ ALT_TRANSLATIONS = 4   # extra translations kept per cue for matching (see trans
 # Constants
 SUPPORTED_EXTENSIONS = {".srt", ".ass", ".vtt", ".sub"}
 
-def _fix_policy(args, check, queue_len):
+def _fix_policy(args, check, interactive=True):
     """What a Sync Check does after reporting a file.
 
-    'auto'   --check --fix (with or without -s): take the advice, never ask
-    'report' --check on the command line (with or without -s): only report, never ask
-    'batch'  several files from the menu: not interrupted, the summary shows what needs fixing
-    'ask'    one file from the menu: offer the fixes
+    'auto'   --fix: take the advice, never ask
+    'report' --report (or no terminal to ask on): only report
+    'ask'    otherwise, for every file (also in a batch): offer the fixes (the default)
     None     not a check
     """
     if not check:
         return None
-    if args.subtitle or getattr(args, "report_only", False):
-        return "auto" if getattr(args, "fix", False) else "report"
-    return "batch" if queue_len > 1 else "ask"
+    if getattr(args, "fix", False):
+        return "auto"
+    if getattr(args, "report", False) or not interactive:
+        return "report"
+    return "ask"
 
 
 def _offer_fix(console, result):
@@ -42,7 +43,11 @@ def _offer_fix(console, result):
     subtitle does not belong to this video (too few cues matched, so there is nothing to align).
     """
     verdict = result["verdict"]
-    if verdict in ("in_sync", "not_comparable"):
+    if verdict == "in_sync":
+        console.print("[green]✅ Nothing to fix: the subtitle is in sync.[/green]")
+        return None
+    if verdict == "not_comparable":
+        console.print("[yellow]⚠️ Nothing to offer: the subtitle does not seem to belong to this video.[/yellow]")
         return None
     options = []
     if result.get("fps"):
@@ -167,9 +172,8 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
     # PROCESS QUEUE
     file_label = "file" if len(queue) == 1 else "files"
     check = bool(getattr(args, "check", False))      # Sync Check: measure and report, write nothing
-    # --check on the command line (with or without -s) only reports, or with --fix acts on its own: it never asks. The menu entry
-    # for a single file still offers the fixes.
-    policy = _fix_policy(args, check, len(queue))
+    # A check on one file offers the fixes afterwards; --report only reports, --fix acts on its own.
+    policy = _fix_policy(args, check, interactive=sys.stdin.isatty())
     hands_off = policy in ("auto", "report")          # exit code 3 tells a script when something is not in sync
     check_results = []
     check_entries = []          # for the batch summary: name, video name, result
@@ -396,7 +400,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                 elif policy == "ask":
                     choice = _offer_fix(console, result)
                 else:
-                    choice = None            # report only / a batch is not interrupted: the summary at the end shows what needs fixing
+                    choice = None            # --report (or no terminal): the summary at the end shows what needs fixing
                 if choice == "framerate":
                     entry["action"] = f"frame rate {result['fps'][0]} to {result['fps'][1]} fps"
                     from ..framerate.framerate import _retime_file, resolve_rate

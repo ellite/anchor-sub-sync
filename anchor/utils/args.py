@@ -96,7 +96,15 @@ def parse_arguments():
         "--check",
         action="store_true",
         help="Check whether a subtitle is in sync with its video (use with -s, and -v if the video is not found automatically). "
-             "Nothing is written; exit code 3 when the subtitle is not in sync.",
+             "After the report it offers to fix a single file (frame rate change or Audio Sync); use --report to only report, "
+             "--fix to act without asking.",
+        default=False
+    )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="Sync Check in report mode: print the report and stop, without offering to fix (implies --check). "
+             "Exit code 3 when the subtitle is not in sync, for scripts.",
         default=False
     )
     parser.add_argument(

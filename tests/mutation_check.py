@@ -91,10 +91,9 @@ M += [
  ("summary: file names not escaped", V2, 'escape(entry["name"])', 'entry["name"]'),
  ("summary: commands not quoted", V2, "shlex.quote(entry['name'])", "entry['name']"),
  ("summary: fixed files still get a command", V2, 'and not e.get("action")]', ']'),
- ("--check without -s opens the menu", 'anchor/cli.py', '    if args.check:\n        return "check"', '    if args.check and args.subtitle:\n        return "check"'),
- ("--check on the command line asks questions", 'anchor/core/audiosync/audiosync.py', 'if args.subtitle or getattr(args, "report_only", False):', 'if args.subtitle:'),
- ("a batch from the menu asks per file", 'anchor/core/audiosync/audiosync.py', 'return "batch" if queue_len > 1 else "ask"', 'return "ask"'),
- ("--fix never acts", 'anchor/core/audiosync/audiosync.py', 'return "auto" if getattr(args, "fix", False) else "report"', 'return "report"'),
+ ("--check without -s opens the menu", 'anchor/cli.py', '    if args.check or args.report:\n        return "check"', '    if (args.check or args.report) and args.subtitle:\n        return "check"'),
+ ("--report still offers the fixes", 'anchor/core/audiosync/audiosync.py', 'if getattr(args, "report", False) or not interactive:', 'if not interactive:'),
+ ("--fix asks instead of acting", 'anchor/core/audiosync/audiosync.py', '    if getattr(args, "fix", False):\n        return "auto"', '    if False:\n        return "auto"'),
  ("new writer bypasses the helper", 'anchor/core/new_task.py', None, "def go(subs, path):\n    subs.save(str(path))\n"),
 ]
 

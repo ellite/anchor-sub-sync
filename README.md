@@ -432,8 +432,9 @@ You can override the automatic hardware detection or control specific settings u
 | --cpu | | Force CPU execution, bypassing GPU detection. |
 | --check-hardware | | Re-run hardware detection and refresh the cached profile. |
 | --api | | Start the local translation API server (see API Mode). |
-| --check | | Only check whether subtitles are in sync with their video: a report, never a question, nothing written (exit code 3 when one is not in sync). With `-s` it checks that file, without it you pick files in the picker. See [Sync Check](#-sync-check) below. |
-| --fix | | With `--check`: act on the advice without asking. Subtitles in sync are skipped, a suggested frame rate change is applied (after verifying it), otherwise Audio Sync runs. |
+| --check | | Check whether subtitles are in sync with their video. For a single file it prints the report and then offers to fix it (frame rate change, Audio Sync, or nothing). With `-s` it checks that file, without it you pick files in the picker. See [Sync Check](#-sync-check) below. |
+| --report | | With or instead of `--check`: only print the report and stop, never ask, nothing written (exit code 3 when one is not in sync, for scripts). |
+| --fix | | With `--check`: act on the advice without asking (not with `--report`). Subtitles in sync are skipped, a suggested frame rate change is applied (after verifying it), otherwise Audio Sync runs. |
 | --from-fps | | For unattended frame rate change (with `-s` and `--to-fps`): the frame rate the subtitle was made for, e.g. `23.976`. |
 | --to-fps | | For unattended frame rate change (with `-s` and `--from-fps`): the frame rate of your video, e.g. `25`. |
 | --language | -l | For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation or download |
@@ -495,7 +496,7 @@ then `Movie.en.synced.1.srt`, `.2.` and so on); this covers every task, includin
 (`Movie.embedded.mkv`, `Movie.stripped.mkv`, `Movie.burn.mkv`) and `.bak` backups. Only `-o` replaces files: with it the original
 subtitle (or, for Embed and Strip, the original video) is overwritten, and `-B` keeps a `.bak` copy first.
 
-Check whether a subtitle is in sync (nothing is written; without `-s`, `anchor --check` lets you pick the files and only prints the report):
+Check whether a subtitle is in sync (it reports, then offers to fix a single file; add `--report` to only report. Without `-s`, `anchor --check` lets you pick the files):
 
 ```bash
 anchor -s A.3.Minutes.Example.Video.en.srt -v A.3.Minutes.Example.Video.mkv --check
@@ -548,12 +549,12 @@ Run from the menu on a single file, it then offers what to do about the finding,
 frame rate change, Audio Sync, or nothing. A frame rate change is suggested only when exactly one frame rate pair explains the drift
 (the video's own frame rate must be the target). Pairs that differ by 0.1%, like 23.976 to 25 and 24 to 25, cannot be told apart by
 measuring, so then Anchor says so and recommends Audio Sync instead of guessing. A subtitle that does not belong to the video
-(not comparable) gets no offer. With the `--check` flag, with or without `-s`, it only reports and never asks; to just get the report, use that. Add `--fix` to let it act on its own advice: `anchor -s movie.en.srt -v movie.mkv --check --fix`.
+(not comparable) gets no offer. `--check` (with or without `-s`) and the menu entry both offer it, for each file in a batch too; with no terminal to ask on it only reports. To just get the report, add `--report`. Add `--fix` to let it act on its own advice: `anchor -s movie.en.srt -v movie.mkv --check --fix`.
 Subtitles in sync are skipped; a suggested frame rate change is applied only after it has been checked again against the same
 transcription (if it does not bring the subtitle in sync, Audio Sync is performed instead); with no suggestion, Audio Sync is performed. A subtitle that does not belong
 to the video is skipped and gives exit code 3. Output files are named as usual (`.25fps.srt`, `.synced.srt`), never overwriting unless `-o` is given.
 
-When you check several subtitles at once from the menu, nothing interrupts the batch: each file is checked and reported, then a
+When you check several subtitles at once, each file is checked, reported and (unless `--report`) you are asked what to do with it; then a
 summary table lists them with the ones that need fixing first (verdict, what was found, suggested fix), the counts, and a ready-to-run
 `--check --fix` command for each file that needs it.
 

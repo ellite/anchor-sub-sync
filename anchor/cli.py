@@ -22,11 +22,14 @@ def _resolve_task(args):
         return "api"
     if args.from_fps is not None or args.to_fps is not None:
         return "framerate"
+    if args.fix and args.report:
+        console.print("[bold red]❌ Error:[/bold red] --report only reports; --fix acts. Use one of them.")
+        sys.exit(1)
     if args.fix and not args.check:
         console.print("[bold red]❌ Error:[/bold red] --fix is used together with --check (anchor -s <subtitle> --check --fix).")
         sys.exit(1)
-    if args.check:
-        return "check"          # with -s one file; without it the file picker, either way no questions asked
+    if args.check or args.report:
+        return "check"          # with -s one file; without it the file picker
     if args.subtitle:
         if args.video:
             return "audio"
@@ -148,8 +151,7 @@ def _run_heavy_task(task, args, config):
         run_apimode(args, device, model_size, compute_type, batch_size, translation_model, console, config, cpu_threads)
     elif task in ("audio", "check"):
         from .core.audiosync.audiosync import run_audiosync
-        args.report_only = bool(args.check)               # --check on the command line never asks what to do; the menu entry may
-        args.check = args.check or task == "check"      # Sync Check is the audio pipeline up to the alignment, then a report
+        args.check = args.check or args.report or task == "check"      # Sync Check is the audio pipeline up to the alignment, then a report
         run_audiosync(args, device, model_size, compute_type, batch_size, translation_model, console, cpu_threads)
     elif task == "reference":
         from .core.referencesync.referencesync import run_referencesync

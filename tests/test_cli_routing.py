@@ -22,7 +22,8 @@ def task(monkeypatch, *argv):
     (["-d"], "download"),
     (["--api"], "api"),
     ([], None),                                           # no arguments: the interactive menu
-    (["--check"], "check"),                               # no -s: the file picker, report only
+    (["--check"], "check"),                               # no -s: the file picker
+    (["--report"], "check"),
     (["--check", "--fix"], "check"),
     (["-s", "a.srt", "--check"], "check"),
     (["-s", "a.srt", "-v", "a.mkv", "--check", "--fix"], "check"),
@@ -41,6 +42,12 @@ def test_fix_without_check_is_an_error(monkeypatch):
     """--fix writes files by itself; it must never run without the check that decides what to do."""
     with pytest.raises(SystemExit) as exit_info:
         task(monkeypatch, "-s", "a.srt", "--fix")
+    assert exit_info.value.code == 1
+
+
+def test_report_and_fix_together_is_an_error(monkeypatch):
+    with pytest.raises(SystemExit) as exit_info:
+        task(monkeypatch, "-s", "a.srt", "--check", "--report", "--fix")
     assert exit_info.value.code == 1
 
 
@@ -75,16 +82,16 @@ from argparse import Namespace
 from anchor.core.audiosync.audiosync import _fix_policy
 
 
-@pytest.mark.parametrize("args, check, queue_len, expected", [
-    (Namespace(subtitle="a.srt", fix=False), True, 1, "report"),                        # anchor -s a.srt --check
-    (Namespace(subtitle="a.srt", fix=True), True, 1, "auto"),                           # ... --check --fix
-    (Namespace(subtitle=None, fix=False, report_only=True), True, 1, "report"),         # anchor --check (picker, one file)
-    (Namespace(subtitle=None, fix=False, report_only=True), True, 5, "report"),         # anchor --check (picker, a batch)
-    (Namespace(subtitle=None, fix=True, report_only=True), True, 5, "auto"),            # anchor --check --fix (picker)
-    (Namespace(subtitle=None, fix=False, report_only=False), True, 1, "ask"),           # menu: Sync Check on one file
-    (Namespace(subtitle=None, fix=False, report_only=False), True, 4, "batch"),         # menu: Sync Check on several files
-    (Namespace(subtitle="a.srt", fix=True), False, 1, None),                            # not a check at all
+@pytest.mark.parametrize("args, check, interactive, expected", [
+    (Namespace(subtitle="a.srt", fix=False, report=False), True, True, "ask"),       # anchor -s a.srt --check: offers the fixes
+    (Namespace(subtitle=None, fix=False, report=False), True, True, "ask"),          # anchor --check (picker, one file or a batch) / menu
+    (Namespace(subtitle="a.srt", fix=False, report=True), True, True, "report"),     # --check --report: override, only report
+    (Namespace(subtitle=None, fix=False, report=True), True, True, "report"),
+    (Namespace(subtitle="a.srt", fix=True, report=False), True, True, "auto"),       # --fix: acts without asking
+    (Namespace(subtitle=None, fix=True, report=False), True, True, "auto"),
+    (Namespace(subtitle="a.srt", fix=False, report=False), True, False, "report"),   # no terminal to ask on
+    (Namespace(subtitle="a.srt", fix=True, report=False), False, True, None),        # not a check at all
 ])
-def test_a_sync_check_asks_only_from_the_menu_on_a_single_file(args, check, queue_len, expected):
-    """The --check flag means 'just the report': it never asks. Only the menu entry, for one file, offers the fixes."""
-    assert _fix_policy(args, check, queue_len) == expected
+def test_a_sync_check_asks_unless_told_not_to(args, check, interactive, expected):
+    """A check offers the fixes by default, for every file, also in a batch. --report is the override that only reports."""
+    assert _fix_policy(args, check, interactive) == expected
