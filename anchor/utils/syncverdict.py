@@ -21,6 +21,8 @@ DRIFT_TOTAL_SEC = 1.0      # the fitted line changes by more than this over the 
 STEP_RESIDUAL_SEC = 1.5    # 90th percentile of |drift - fitted line| above this: not a straight line, so steps
 STEP_JUMP_SEC = 3.0        # a jump of at least this between neighbouring runs of cues (block medians wander by about 1 s)
 FPS_AMBIGUOUS = 0.0015     # pairs whose drift differs by less than this cannot be told apart by measuring
+FPS_INTERCEPT_SEC = 2.0    # a frame rate change scales time from 0, so it cannot fix a start that is off by more than this
+FPS_LINE_FIT_SEC = 0.7     # a frame rate drift is a straight line: the eight section medians must lie this close to the fitted line
 FPS_SLOPE_TOL = 0.0004     # drift per second: matching noise alone gives about 0.0003 over a full episode
 MIN_ANCHORS = 8
 MIN_COVERAGE = 0.25        # fewer anchored cues than this share of the file: not comparable
@@ -133,10 +135,25 @@ def assess(points, cue_count, duration=None, video_fps=None):
     elif abs(total) > DRIFT_TOTAL_SEC:
         result["verdict"] = "drifting"
         result["fps"], result["fps_alternatives"] = _match_fps(slope, video_fps)
+        # Changing the frame rate multiplies every time, so the subtitle would still start where it starts now: only a drift
+        # that begins near zero is a frame rate problem. A fitted start far from 0 (a shifted subtitle that also drifts) needs Audio Sync.
+        shifted = (result["fps"] or result["fps_alternatives"]) and abs(intercept) > FPS_INTERCEPT_SEC
+        # ... and it is a straight line. An offset that goes +0.7, -0.6, +0.1, +1.9 along the video has a small overall slope but
+        # is not a frame rate mismatch: it wanders (another cut, or a partly different timing).
+        wobble = max((abs(m - (slope * (a + b) / 2 + intercept)) for a, b, m, count in sections if m is not None and count >= 5), default=0.0)
+        wanders = bool(result["fps"] or result["fps_alternatives"]) and not shifted and wobble > FPS_LINE_FIT_SEC
+        if shifted or wanders:
+            result["fps"], result["fps_alternatives"] = None, []
         start_note = "starts in sync" if abs(head) <= SYNC_MEDIAN_SEC else f"starts {_signed(head)} off"
         result["summary"] = (f"The subtitle {start_note} and drifts to {_signed(tail)} by the end "
                              f"({_signed(total)} over the video, {slope * 1000:+.2f} ms per second).")
-        if result["fps"]:
+        if wanders:
+            result["advice"] = (f"The offset wanders by about {wobble:.1f} s around a straight line, which a frame rate mismatch does not "
+                                "do (it would be a steady line). Run Audio Sync: it follows the changes cue by cue.")
+        elif shifted:
+            result["advice"] = (f"The slope looks like a frame rate mismatch, but the subtitle also starts about {_signed(intercept)} off, "
+                                "which changing the frame rate would not fix. Run Audio Sync.")
+        elif result["fps"]:
             result["advice"] = (f"This matches a frame rate mismatch: use Change Frame Rate from {result['fps'][0]} to "
                                 f"{result['fps'][1]} fps. Audio Sync also corrects it.")
         elif result["fps_alternatives"]:

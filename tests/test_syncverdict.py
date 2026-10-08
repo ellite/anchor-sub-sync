@@ -195,3 +195,36 @@ def test_the_done_column_only_appears_when_something_was_done():
     console = Console(width=220, record=True)
     syncverdict.print_summary(console, [_entry("a.srt", lambda x: 3.1)])
     assert "Done" not in console.export_text()
+
+
+def test_frame_rate_is_not_suggested_for_a_subtitle_that_also_starts_far_off():
+    """A frame rate change multiplies the times: 54 s early at the start stays 54 s early. Only Audio Sync fixes that."""
+    r = assess(points(lambda x: 54.0 + 0.0427 * x), CUES, video_fps=24000 / 1001)
+    assert r["verdict"] == "drifting"
+    assert r["fps"] is None and r["fps_alternatives"] == []
+    assert "Audio Sync" in r["advice"] and "would not fix" in r["advice"]
+    assert syncverdict.describe(r)[1].startswith("Audio Sync")
+
+
+def test_a_small_start_offset_does_not_stop_the_frame_rate_suggestion():
+    r = assess(points(lambda x: 1.5 + 0.0427 * x), CUES, video_fps=24000 / 1001)
+    assert r["fps"] == ("25", "23.976")
+
+
+def test_a_wandering_offset_is_not_a_frame_rate_mismatch():
+    """+0.7, +0.9, -0.6, -0.5, +0.1, +0.1, +1.9, +1.9 along the video has a slope that fits 24 -> 23.976, but it is not a line."""
+    section_values = [0.7, 0.9, -0.6, -0.5, 0.1, 0.1, 1.9, 1.9]
+    edges = np.linspace(100.0, 2500.0, len(section_values) + 1)
+
+    def wander(x):
+        return section_values[min(int(np.searchsorted(edges, x, side="right")) - 1, len(section_values) - 1)]
+
+    r = assess(points(lambda x: wander(x) + 0.0003 * x, noise=0.15), CUES, video_fps=24000 / 1001)   # slope close to 24 -> 23.976
+    assert r["verdict"] == "drifting"
+    assert r["fps"] is None and r["fps_alternatives"] == []
+    assert "wanders" in r["advice"]
+
+
+def test_a_clean_straight_drift_still_suggests_the_frame_rate():
+    r = assess(points(lambda x: 0.0427 * x, noise=0.3), CUES, video_fps=24000 / 1001)
+    assert r["fps"] == ("25", "23.976")

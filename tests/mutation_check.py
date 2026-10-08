@@ -92,6 +92,8 @@ M += [
  ("summary: commands not quoted", V2, "shlex.quote(entry['name'])", "entry['name']"),
  ("summary: fixed files still get a command", V2, 'and not e.get("action")]', ']'),
  ("--check without -s opens the menu", 'anchor/cli.py', '    if args.check or args.report:\n        return "check"', '    if (args.check or args.report) and args.subtitle:\n        return "check"'),
+ ("frame rate suggested for a far-off start", V2, 'and abs(intercept) > FPS_INTERCEPT_SEC', 'and False'),
+ ("frame rate suggested for a wandering offset", V2, 'and not shifted and wobble > FPS_LINE_FIT_SEC', 'and not shifted and False'),
  ("--report still offers the fixes", 'anchor/core/audiosync/audiosync.py', 'if getattr(args, "report", False) or not interactive:', 'if not interactive:'),
  ("--fix asks instead of acting", 'anchor/core/audiosync/audiosync.py', '    if getattr(args, "fix", False):\n        return "auto"', '    if False:\n        return "auto"'),
  ("new writer bypasses the helper", 'anchor/core/new_task.py', None, "def go(subs, path):\n    subs.save(str(path))\n"),
