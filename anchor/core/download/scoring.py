@@ -12,24 +12,38 @@ def strip_articles(title: str) -> str:
     """Removes leading articles for a base comparison."""
     return re.sub(r'^(the|a|an)\s+', '', title).strip()
 
+def _fold_initialisms(tokens_a, tokens_b):
+    """Rewrites runs of words in `tokens_b` as the short word of `tokens_a` that is their initials ("new york" -> "ny")."""
+    out = list(tokens_b)
+    for short in {t for t in tokens_a if 2 <= len(t) <= 4}:
+        n = len(short)
+        for i in range(len(out) - n + 1):
+            if out[i:i + n] != [short] and all(len(w) > 1 for w in out[i:i + n]) and "".join(w[0] for w in out[i:i + n]) == short:
+                out[i:i + n] = [short]
+                break
+    return out
+
+
+def titles_match(a: str, b: str) -> bool:
+    """Same show under different names: articles, near spellings, and initialisms ("CSI NY" = "CSI New York")."""
+    a, b = normalize_title(a), normalize_title(b)
+    base_a, base_b = strip_articles(a), strip_articles(b)
+    if a == b or base_a == base_b:
+        return True
+    if not (base_a and base_b):
+        return False
+    if difflib.SequenceMatcher(None, base_a, base_b).ratio() > 0.80:
+        return True
+    ta, tb = base_a.split(), base_b.split()
+    return _fold_initialisms(ta, tb) == ta or _fold_initialisms(tb, ta) == tb
+
+
 def calculate_score(target_parsed: dict, sub_dict: dict, target_langs_list: list, prefer_sdh: bool = False, prefer_forced: bool = False) -> int:
     sub_parsed = parse_video_filename(sub_dict.get("filename", ""))
     
     # --- 1. Is it the correct show/movie? ---
-    target_norm = normalize_title(target_parsed.get("title", ""))
-    sub_norm = normalize_title(sub_parsed.get("title", ""))
-    target_base = strip_articles(target_norm)
-    sub_base = strip_articles(sub_norm)
-    
-    is_correct_show = False
-    
     # A. Check the title
-    if target_norm == sub_norm or target_base == sub_base:
-        is_correct_show = True
-    elif target_base and sub_base:
-        similarity = difflib.SequenceMatcher(None, target_base, sub_base).ratio()
-        if similarity > 0.80:
-            is_correct_show = True
+    is_correct_show = titles_match(target_parsed.get("title", ""), sub_parsed.get("title", ""))
             
     # B. Strict TV Check
     t_season = target_parsed.get("season")

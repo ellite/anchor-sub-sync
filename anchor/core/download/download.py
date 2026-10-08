@@ -274,7 +274,7 @@ def run_download(args, config: dict, console: Console):
                     success = download_opensubtitles(best_sub["id"], file, os_api_key, os_token, custom_suffix=final_suffix)
             elif best_sub["provider"] == "SubDL":
                 with console.status(f"   [dim]Downloading {sub_lang.upper()} subtitle from SubDL...[/dim]", spinner="dots"):
-                    success = download_subdl(best_sub["id"], file, custom_suffix=final_suffix, episode=parsed_data.get("episode"))
+                    success = download_subdl(best_sub["id"], file, custom_suffix=final_suffix, episode=parsed_data.get("episode"), season=parsed_data.get("season"))
             elif best_sub["provider"] == "Addic7ed":
                 with console.status(f"   [dim]Downloading {sub_lang.upper()} subtitle from Addic7ed...[/dim]", spinner="dots"):
                     success = download_addic7ed(best_sub["id"], file, custom_suffix=final_suffix)

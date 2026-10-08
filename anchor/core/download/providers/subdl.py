@@ -234,7 +234,7 @@ def search_subdl(parsed_data: dict, language: str, api_key: str) -> list:
     return filtered_results
 
 
-def download_subdl(url_path: str, target_video_path: Path, custom_suffix: str = ".srt", episode: str = None) -> bool:
+def download_subdl(url_path: str, target_video_path: Path, custom_suffix: str = ".srt", episode: str = None, season: str = None) -> bool:
     """
     Downloads a subtitle ZIP/RAR from SubDL, extracts the right .srt inside,
     and saves it next to the video with the given custom_suffix.
@@ -263,7 +263,7 @@ def download_subdl(url_path: str, target_video_path: Path, custom_suffix: str = 
                 if not srt_names:
                     return False
 
-                chosen = _pick_episode_from_pack(srt_names, episode)
+                chosen = _pick_episode_from_pack(srt_names, episode, season)
                 srt_content = zf.read(chosen)
 
             with open(final_path, "wb") as f:
@@ -306,7 +306,7 @@ def download_subdl(url_path: str, target_video_path: Path, custom_suffix: str = 
                             
                         # Re-use your episode picker logic
                         srt_names = [f.name for f in srt_files]
-                        chosen_name = _pick_episode_from_pack(srt_names, episode)
+                        chosen_name = _pick_episode_from_pack(srt_names, episode, season)
                         chosen_path = next(f for f in srt_files if f.name == chosen_name)
                         
                         # Copy the chosen file to the final destination
@@ -327,24 +327,41 @@ def download_subdl(url_path: str, target_video_path: Path, custom_suffix: str = 
 
     return False
 
-def _pick_episode_from_pack(srt_names: list, episode: str) -> str:
+def _pick_episode_from_pack(srt_names: list, episode: str, season: str = None) -> str:
     """
-    Given a list of .srt filenames from a ZIP, returns the best match
-    for the target episode number. Falls back to srt_names[0] if no match.
+    Given the subtitle files of a season pack, returns the one for the target episode.
+    Tries, in order: S02E03 style (the season must agree when known), 2x03 / E03 style, and a bare number such as
+    "03 Zoo York.srt" (name starting with it, or the number standing alone). Falls back to srt_names[0] if nothing matches.
     """
     if not episode or len(srt_names) == 1:
         return srt_names[0]
 
-    ep_num = str(episode).zfill(2)  # "1" -> "01"
+    ep = int(episode)
+    se = [int(season)] if season else None
 
-    # Match patterns like S01E01, E01, _01_, .01.
-    ep_pattern = re.compile(
-        rf'[Ee]{ep_num}|[^0-9]{ep_num}[^0-9]',
-    )
+    def numbers(pattern):
+        return re.compile(pattern, re.IGNORECASE)
 
-    for name in srt_names:
-        if ep_pattern.search(name):
-            return name
+    tiers = [numbers(r'(?<![a-z0-9])s(\d{1,2})[\s._-]*e(\d{1,3})(?!\d)'),      # S02E03, s02.e03
+             numbers(r'(?<![a-z0-9])(\d{1,2})x(\d{1,3})(?!\d)')]                  # 2x03
+    for pattern in tiers:
+        for name in srt_names:
+            for m in pattern.finditer(Path(name).name):
+                if int(m.group(2)) == ep and (se is None or int(m.group(1)) in se):
+                    return name
+
+    # E03 on its own, then a bare number: the file name starts with it ("03 Zoo York.srt"), then any standalone number.
+    # Names that carry an S02E.. tag were handled above, so their season number is never taken for an episode.
+    bare = [(numbers(r'(?<![a-z0-9])e(?:p(?:isode)?)?[\s._-]*0*%d(?!\d)' % ep), None),
+            (numbers(r'^\W*0*%d(?!\d)' % ep), None),
+            (numbers(r'(?<!\d)0*%d(?!\d)' % ep), re.compile(r's\d{1,2}[\s._-]*e\d', re.IGNORECASE))]
+    for pattern, skip in bare:
+        for name in srt_names:
+            base = Path(name).name
+            if skip and skip.search(base):
+                continue
+            if pattern.search(base):
+                return name
 
     # Fallback
     return srt_names[0]
