@@ -128,6 +128,13 @@ def parse_arguments():
         default=False
     )
 
+    parser.add_argument(
+        "--match-table",
+        action="store_true",
+        help="Audio sync: print each cue's (translated) text, the words the speech matched, and whether it anchored. For diagnosis.",
+        default=False
+    )
+
     # Hardware
     parser.add_argument(
         "--cpu",

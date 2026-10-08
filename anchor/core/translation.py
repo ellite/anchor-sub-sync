@@ -232,6 +232,27 @@ def _translate_ct2_batch(batch, tokenizer, translator, forced_bos, beam_size=4, 
     )
 
 
+ALT_BEAM = 8       # beam of the extra search that yields the alternative translations
+ALT_HYPOTHESES = 4  # how many of its best translations per line are kept (the aligner matches a cue against all of them)
+
+
+def _translate_ct2_nbest(batch, tokenizer, translator, forced_bos, beam_size=ALT_BEAM, n_best=ALT_HYPOTHESES):
+    """The `n_best` best translations of every line, as a list (one per line) of lists of strings."""
+    source = tokenizer(batch)["input_ids"]
+    source_tokens = [tokenizer.convert_ids_to_tokens(s) for s in source]
+    results = translator.translate_batch(
+        source_tokens,
+        target_prefix=[[forced_bos]] * len(batch),
+        beam_size=beam_size,
+        num_hypotheses=n_best,
+        max_decoding_length=128,
+        repetition_penalty=1.2,
+        no_repeat_ngram_size=3,
+    )
+    return [tokenizer.batch_decode([tokenizer.convert_tokens_to_ids(h) for h in r.hypotheses], skip_special_tokens=True)
+            for r in results]
+
+
 # Main CLI Translation Function (For Subtitle Files)
 
 def translate_subtitle_nllb(
@@ -243,9 +264,12 @@ def translate_subtitle_nllb(
     compute_type="auto",
     progress: Progress = None,
     task_id: TaskID = None,
-    cpu_threads: int = 0
+    cpu_threads: int = 0,
+    alternatives: int = 0
 ) -> pysubs2.SSAFile:
-    
+    """Translates a subtitle. With `alternatives` > 0 the returned subtitle also carries `.alternatives`: that many other
+    translations of every cue (list of lists of texts, same order as the events), which the sync aligner matches against
+    as well, because a cue only anchors when the translation happens to use the words that were spoken."""
     metas = [] 
     all_lines = []
 
@@ -426,6 +450,19 @@ def translate_subtitle_nllb(
             else:
                 translated_lines[idx] = clean_tgt
 
+        # Alternative translations (only used for matching, so no clean-up or formatting)
+        alt_lines = []
+        if alternatives > 0:
+            n_alt = min(alternatives, ALT_HYPOTHESES)
+            to_do = [(i, l.capitalize() if is_all_upper(l) else l) for i, l in enumerate(all_lines) if any(c.isalpha() for c in l)]
+            alt_lines = [list(translated_lines) for _ in range(n_alt)]
+            for i in range(0, len(to_do), batch_size):
+                chunk = to_do[i:i + batch_size]
+                for (line_idx, _), options in zip(chunk, _translate_ct2_nbest([t for _, t in chunk], tokenizer, translator, forced_bos, n_best=n_alt)):
+                    for k in range(n_alt):
+                        if k < len(options):
+                            alt_lines[k][line_idx] = options[k]
+
         # Rebuild Blocks
         ghost_sub = copy.deepcopy(sub)
         cursor = 0
@@ -439,7 +476,15 @@ def translate_subtitle_nllb(
 
             # PySubs2 requires '\N' for line breaks internally, so we swap standard newlines
             ghost_sub[event_idx].text = block_text.replace('\n', '\\N')
-            
+
+        if alt_lines:
+            ghost_sub.alternatives = [[e.text for e in ghost_sub] for _ in alt_lines]
+            cursor = 0
+            for event_idx, line_count in metas:
+                for k, lines in enumerate(alt_lines):
+                    ghost_sub.alternatives[k][event_idx] = " ".join(lines[cursor : cursor + line_count])
+                cursor += line_count
+
         return ghost_sub
 
     except Exception as e:

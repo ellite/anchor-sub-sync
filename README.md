@@ -432,7 +432,7 @@ You can override the automatic hardware detection or control specific settings u
 | --cpu | | Force CPU execution, bypassing GPU detection. |
 | --check-hardware | | Re-run hardware detection and refresh the cached profile. |
 | --api | | Start the local translation API server (see API Mode). |
-| --check | | With `-s`: only check whether the subtitle is in sync with its video (nothing is written; exit code 3 when it is not). See [Sync Check](#-sync-check) below. |
+| --check | | Only check whether subtitles are in sync with their video: a report, never a question, nothing written (exit code 3 when one is not in sync). With `-s` it checks that file, without it you pick files in the picker. See [Sync Check](#-sync-check) below. |
 | --fix | | With `--check`: act on the advice without asking. Subtitles in sync are skipped, a suggested frame rate change is applied (after verifying it), otherwise Audio Sync runs. |
 | --from-fps | | For unattended frame rate change (with `-s` and `--to-fps`): the frame rate the subtitle was made for, e.g. `23.976`. |
 | --to-fps | | For unattended frame rate change (with `-s` and `--from-fps`): the frame rate of your video, e.g. `25`. |
@@ -495,7 +495,7 @@ then `Movie.en.synced.1.srt`, `.2.` and so on); this covers every task, includin
 (`Movie.embedded.mkv`, `Movie.stripped.mkv`, `Movie.burn.mkv`) and `.bak` backups. Only `-o` replaces files: with it the original
 subtitle (or, for Embed and Strip, the original video) is overwritten, and `-B` keeps a `.bak` copy first.
 
-Check whether a subtitle is in sync (nothing is written):
+Check whether a subtitle is in sync (nothing is written; without `-s`, `anchor --check` lets you pick the files and only prints the report):
 
 ```bash
 anchor -s A.3.Minutes.Example.Video.en.srt -v A.3.Minutes.Example.Video.mkv --check
@@ -544,14 +544,18 @@ spoken and reads how the offset behaves over the whole video. It changes nothing
 | Out of sync (steps) | The offset changes in jumps: another cut, removed scenes, a partly synced file | Audio Sync or Reference Sync |
 | Not comparable | Too few lines found in the speech: wrong video, language or a damaged file | check the pairing |
 
-Run from the menu, it then offers what to do about the finding, using the transcription it just made: the suggested
+Run from the menu on a single file, it then offers what to do about the finding, using the transcription it just made: the suggested
 frame rate change, Audio Sync, or nothing. A frame rate change is suggested only when exactly one frame rate pair explains the drift
 (the video's own frame rate must be the target). Pairs that differ by 0.1%, like 23.976 to 25 and 24 to 25, cannot be told apart by
 measuring, so then Anchor says so and recommends Audio Sync instead of guessing. A subtitle that does not belong to the video
-(not comparable) gets no offer. Unattended (`--check`) it only reports. Add `--fix` to let it act on its own advice: `anchor -s movie.en.srt -v movie.mkv --check --fix`.
+(not comparable) gets no offer. With the `--check` flag, with or without `-s`, it only reports and never asks; to just get the report, use that. Add `--fix` to let it act on its own advice: `anchor -s movie.en.srt -v movie.mkv --check --fix`.
 Subtitles in sync are skipped; a suggested frame rate change is applied only after it has been checked again against the same
 transcription (if it does not bring the subtitle in sync, Audio Sync is performed instead); with no suggestion, Audio Sync is performed. A subtitle that does not belong
 to the video is skipped and gives exit code 3. Output files are named as usual (`.25fps.srt`, `.synced.srt`), never overwriting unless `-o` is given.
+
+When you check several subtitles at once from the menu, nothing interrupts the batch: each file is checked and reported, then a
+summary table lists them with the ones that need fixing first (verdict, what was found, suggested fix), the counts, and a ready-to-run
+`--check --fix` command for each file that needs it.
 
 A table shows the offset for eight equal parts of the video. Positive means the subtitle shows up early. It skips the
 gap repair of an audio sync, so it is faster (about 35 s for a 44-minute episode with Parakeet; Whisper takes longer), and it uses

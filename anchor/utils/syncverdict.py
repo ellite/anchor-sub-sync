@@ -195,3 +195,77 @@ def print_report(console, name, result):
             sparse = "  (too few to trust)" if 0 < count < 3 else ""
             bar = "" if drift is None else "█" * min(30, int(round(abs(drift) * 3)))
             console.print(f"   [dim]{_clock(a)} - {_clock(b)}[/dim]  {shown:>8}  [{colour if abs(drift or 0) > SYNC_MEDIAN_SEC else 'green'}]{bar}[/]  [dim]{count} {noun}{sparse}[/dim]")
+
+
+# ------------------------------------------------------------------ batch summary
+
+NEEDS_FIX = ("offset", "drifting", "steps")        # verdicts that call for a fix
+_ORDER = {"steps": 0, "drifting": 1, "offset": 2, "not_comparable": 3, "loose": 4, "in_sync": 5, "failed": 6}
+
+
+def describe(result):
+    """(what was found, what to do) as short strings for one row of the batch summary."""
+    verdict = result["verdict"]
+    if verdict == "in_sync":
+        return f"average {_signed(result['median'])}", "nothing"
+    if verdict == "loose":
+        return f"average {_signed(result['median'])}, 90% within {result['spread']:.1f} s", "optional: Audio Sync"
+    if verdict == "offset":
+        return f"{_signed(result['median'])} for the whole file", "Audio Sync"
+    if verdict == "drifting":
+        found = f"{_signed(result['head'])} at the start, {_signed(result['tail'])} at the end"
+        if result.get("fps"):
+            return found, f"Change Frame Rate {result['fps'][0]} to {result['fps'][1]} fps"
+        if result.get("fps_alternatives"):
+            return found, f"Audio Sync (fits {' or '.join(result['fps_alternatives'])}, cannot tell which)"
+        return found, "Audio Sync"
+    if verdict == "steps":
+        where = ", ".join(_clock(step[0]) for step in result["steps"][:3])
+        return (f"jumps at {where}" if where else "irregular offset"), "Audio Sync or Reference Sync"
+    return f"{result['anchors']} of {result['cues']} cues found", "check it is the right video and language"
+
+
+def print_summary(console, entries, failed=()):
+    """After a batch check: one table (files that need a fix first), the counts, and a command to fix each.
+
+    `entries`: [{"name", "video", "result"}]; `failed`: names of files that could not be checked.
+    """
+    import shlex
+    from rich.markup import escape
+    from rich.table import Table
+
+    rows = sorted(entries, key=lambda e: _ORDER[e["result"]["verdict"]])
+    table = Table(box=None, header_style="bold", padding=(0, 1))
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("File", overflow="fold")
+    table.add_column("Verdict", no_wrap=True)
+    table.add_column("What was found", overflow="fold")
+    table.add_column("Suggested fix", overflow="fold")
+    acted = any(e.get("action") for e in entries)             # --check --fix: say what was done
+    if acted:
+        table.add_column("Done", overflow="fold")
+    for n, entry in enumerate(rows, 1):
+        icon, label, colour = LABELS[entry["result"]["verdict"]]
+        found, fix = describe(entry["result"])
+        extra = [escape(entry.get("action") or "-")] if acted else []
+        table.add_row(str(n), escape(entry["name"]), f"[{colour}]{icon} {label}[/{colour}]", found, fix, *extra)
+    for name in failed:
+        table.add_row(str(len(rows) + 1), escape(name), "[red]⚠️ COULD NOT CHECK[/red]", "see the messages above", "run it again", *(["-"] if acted else []))
+
+    counts = {}
+    for entry in entries:
+        counts[entry["result"]["verdict"]] = counts.get(entry["result"]["verdict"], 0) + 1
+    need = sum(counts.get(v, 0) for v in NEEDS_FIX)
+    parts = [f"✅ {counts.get('in_sync', 0)} in sync", f"🟡 {counts.get('loose', 0)} mostly in sync",
+             f"❌ {need} need fixing", f"❓ {counts.get('not_comparable', 0)} not comparable"]
+    if failed:
+        parts.append(f"⚠️ {len(failed)} could not be checked")
+
+    console.print("\n[bold]📋 Sync Check summary[/bold]")
+    console.print(table)
+    console.print("\n   " + "   ".join(parts))
+    fixable = [e for e in rows if e["result"]["verdict"] in NEEDS_FIX and not e.get("action")]
+    if fixable:
+        console.print("\n[bold]To fix the files that need it[/bold] [dim](each takes the check's own advice: a verified frame rate change, else Audio Sync)[/dim]")
+        for entry in fixable:
+            console.print(f"   anchor -s {shlex.quote(entry['name'])} -v {shlex.quote(entry['video'])} --check --fix", markup=False, highlight=False)

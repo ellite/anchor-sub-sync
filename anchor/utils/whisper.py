@@ -227,27 +227,57 @@ def run_whisper_transcription(video_path, device, compute_type, batch_size, mode
     return whisper_data, detected_lang
 
 
-def align_subtitles(subs, whisper_data, precise=False):
+def align_subtitles(subs, whisper_data, precise=False, match_table=False, translated=False):
     """Runs GlobalAligner on an in-memory subtitle. Retimes the events of `subs` in place.
 
     Returns (synced_subs, rejected_count, anchor_count). The synced file may be re-sorted, but its events are
     the same objects as in `subs`, so callers holding references to them see the new timings.
     """
     console.print("[dim]🧮 Calculating sync offsets...[/dim]")
-    aligner = GlobalAligner(subs, whisper_data, precise=precise)
+    aligner = GlobalAligner(subs, whisper_data, precise=precise, translated=translated)
     synced_subs, rejected = aligner.run()
 
     if synced_subs is None:
         raise Exception("Zero matches found.")
 
+    if match_table:
+        print_match_table(aligner)
+
     return synced_subs, rejected, aligner.anchor_count
 
 
-def check_subtitles(subs, whisper_data, precise=False, video_fps=None):
+def print_match_table(aligner):
+    """Prints each cue's text with its words found in the speech or (not found), what was transcribed there, and its status."""
+    from rich.table import Table
+    from rich.markup import escape
+    from .formatting import clean_text
+    table = Table(title="Match table (Matched to: the cue's words as compared; (red) = not found in the audio)")
+    table.add_column("#", justify="right")
+    table.add_column("Time", justify="right")
+    table.add_column("Translated Text", overflow="fold", ratio=3)
+    table.add_column("Cue words (found / (not found))", overflow="fold", ratio=2)
+    table.add_column("Transcribed around then", overflow="fold", ratio=3)
+    table.add_column("Status")
+    colour = {'anchored': 'green', 'rejected': 'yellow', 'unmatched': 'red'}
+    counts = {'anchored': 0, 'rejected': 0, 'unmatched': 0}
+    for idx, start, text, heard, status, around in aligner.cue_report:
+        counts[status] += 1
+        got = sum(1 for h in heard if h)
+        words = clean_text(text.lstrip('↻ ')).split()
+        shown = ' '.join(escape(h) if h else f"[red]({escape(words[i] if i < len(words) else '?')})[/red]"
+                         for i, h in enumerate(heard)) if got else '—'
+        plain = ' '.join(text.replace('\\N', ' ').split())
+        table.add_row(str(idx + 1), f"{start:.1f}", escape(plain), shown, escape(' '.join(around)) or '—',
+                      f"[{colour[status]}]{status} {got}/{len(heard)}[/{colour[status]}]")
+    console.print(table)
+    console.print(f"[bold]Anchored {counts['anchored']}, rejected {counts['rejected']}, unmatched {counts['unmatched']} of {len(aligner.cue_report)} cues[/bold]")
+
+
+def check_subtitles(subs, whisper_data, precise=False, video_fps=None, translated=False):
     """Measures how far `subs` is from the speech without changing it. Returns the dict from syncverdict.assess."""
     from . import alignment
     from .syncverdict import assess
-    aligner = GlobalAligner(subs, whisper_data, precise=precise)
+    aligner = GlobalAligner(subs, whisper_data, precise=precise, translated=translated)
     was_quiet, alignment.console.quiet = alignment.console.quiet, True
     try:
         aligner.run()
@@ -260,7 +290,8 @@ def check_subtitles(subs, whisper_data, precise=False, video_fps=None):
 def run_anchor_align_and_sync(sub_path, whisper_data, args=None, precise=False):
     """Runs GlobalAligner on pre-computed whisper data and saves the synced subtitle."""
     original_subs = open_subtitle(sub_path)
-    synced_subs, rejected, anchors = align_subtitles(original_subs, whisper_data, precise=precise)
+    synced_subs, rejected, anchors = align_subtitles(original_subs, whisper_data, precise=precise,
+                                                     match_table=bool(args and getattr(args, 'match_table', False)))
 
     if args and getattr(args, "overwrite", False):
         backup_if_needed(sub_path, args)

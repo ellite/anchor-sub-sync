@@ -118,3 +118,80 @@ def test_assess_does_not_modify_its_input():
 def test_every_verdict_has_a_label_for_the_report():
     for verdict in ("in_sync", "loose", "offset", "drifting", "steps", "not_comparable"):
         assert verdict in syncverdict.LABELS
+
+
+# ---------------------------------------------------------------- the batch summary
+
+from rich.console import Console
+
+
+def _entry(name, drift, video="Show.mkv", **kw):
+    return {"name": name, "video": video, "result": assess(points(drift, **kw.pop("pts", {})), CUES, **kw)}
+
+
+def test_each_verdict_says_what_was_found_and_what_to_do():
+    found = lambda r: syncverdict.describe(r)
+    assert found(assess(points(lambda x: 0.1), CUES)) == ("average +0.1 s", "nothing")
+    assert found(assess(points(lambda x: 3.1), CUES))[1] == "Audio Sync"
+    detail, fix = found(assess(points(lambda x: 1.0 + 0.0427 * x), CUES, video_fps=24000 / 1001))
+    assert "at the start" in detail and "at the end" in detail
+    assert fix == "Change Frame Rate 25 to 23.976 fps"
+    assert found(assess(points(lambda x: 0.1 if x < 1200 else 6.1), CUES))[1] == "Audio Sync or Reference Sync"
+    assert "cues found" in found(assess(points(lambda x: 0.0, n=5), CUES))[0]
+
+
+def test_an_ambiguous_frame_rate_is_described_as_such_not_guessed():
+    detail, fix = syncverdict.describe(assess(points(lambda x: 1.0 - 0.0427 * x), CUES, video_fps=25.0))
+    assert fix.startswith("Audio Sync") and "cannot tell which" in fix
+
+
+def test_the_summary_lists_files_that_need_fixing_first_then_the_rest():
+    console = Console(width=200, record=True)
+    entries = [_entry("good.srt", lambda x: 0.1), _entry("offset.srt", lambda x: 3.1), _entry("nope.srt", lambda x: 0.0, pts={"n": 5}),
+               _entry("steps.srt", lambda x: 0.1 if x < 1200 else 6.1)]
+    syncverdict.print_summary(console, entries)
+    text = console.export_text()
+    order = [text.index(name) for name in ("steps.srt", "offset.srt", "nope.srt", "good.srt")]
+    assert order == sorted(order), "files that need fixing must come first"
+    assert "1 in sync" in text and "2 need fixing" in text and "1 not comparable" in text
+
+
+def test_the_summary_gives_a_command_for_each_file_that_needs_a_fix_and_only_those():
+    console = Console(width=200, record=True)
+    entries = [_entry("good.srt", lambda x: 0.1), _entry("My Show S01E02.en.srt", lambda x: 3.1, video="My Show S01E02.mkv")]
+    syncverdict.print_summary(console, entries)
+    text = console.export_text()
+    assert "anchor -s 'My Show S01E02.en.srt' -v 'My Show S01E02.mkv' --check --fix" in text     # quoted: it has spaces
+    assert "anchor -s good.srt" not in text
+
+
+def test_file_names_with_brackets_are_shown_literally_and_failures_are_listed():
+    """Rich reads a lowercase [tag] as markup: a release name like [eztv] Show.srt must not be swallowed."""
+    console = Console(width=200, record=True)
+    syncverdict.print_summary(console, [_entry("[eztv] Show.srt", lambda x: 0.1)], failed=["[rarbg] Broken.srt"])
+    text = console.export_text()
+    assert "[eztv] Show.srt" in text and "[rarbg] Broken.srt" in text
+    assert "1 could not be checked" in text
+
+
+def test_nothing_to_fix_prints_no_commands():
+    console = Console(width=200, record=True)
+    syncverdict.print_summary(console, [_entry("a.srt", lambda x: 0.1), _entry("b.srt", lambda x: 0.2)])
+    assert "anchor -s" not in console.export_text() and "To fix" not in console.export_text()
+
+
+def test_after_a_batch_fix_the_summary_says_what_was_done_and_only_lists_commands_for_what_is_left():
+    console = Console(width=220, record=True)
+    done = _entry("done.srt", lambda x: 3.1)
+    done["action"] = "Audio Sync"
+    left = _entry("left.srt", lambda x: 3.1)
+    syncverdict.print_summary(console, [done, left])
+    text = console.export_text()
+    assert "Done" in text and "Audio Sync" in text
+    assert "anchor -s left.srt" in text and "anchor -s done.srt" not in text
+
+
+def test_the_done_column_only_appears_when_something_was_done():
+    console = Console(width=220, record=True)
+    syncverdict.print_summary(console, [_entry("a.srt", lambda x: 3.1)])
+    assert "Done" not in console.export_text()

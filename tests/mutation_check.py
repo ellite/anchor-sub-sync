@@ -86,6 +86,15 @@ M += [
  ("parakeet cue reach 3 -> 0 s", PK, "CUE_REACH_SEC = 3.0", "CUE_REACH_SEC = 0.0"),
  ("stretched word 1.5 -> 1.2 s", TR, "STRETCHED_WORD_SEC = 1.5", "STRETCHED_WORD_SEC = 1.2"),
  ("stretched back-off 0.3 -> 0.2", TR, "STRETCHED_WORD_BACKOFF_SEC = 0.3", "STRETCHED_WORD_BACKOFF_SEC = 0.2"),
+ ("summary: nothing counts as needing a fix", V2, 'NEEDS_FIX = ("offset", "drifting", "steps")', 'NEEDS_FIX = ()'),
+ ("summary: good files listed first", V2, '"in_sync": 5, "failed": 6', '"in_sync": -1, "failed": 6'),
+ ("summary: file names not escaped", V2, 'escape(entry["name"])', 'entry["name"]'),
+ ("summary: commands not quoted", V2, "shlex.quote(entry['name'])", "entry['name']"),
+ ("summary: fixed files still get a command", V2, 'and not e.get("action")]', ']'),
+ ("--check without -s opens the menu", 'anchor/cli.py', '    if args.check:\n        return "check"', '    if args.check and args.subtitle:\n        return "check"'),
+ ("--check on the command line asks questions", 'anchor/core/audiosync/audiosync.py', 'if args.subtitle or getattr(args, "report_only", False):', 'if args.subtitle:'),
+ ("a batch from the menu asks per file", 'anchor/core/audiosync/audiosync.py', 'return "batch" if queue_len > 1 else "ask"', 'return "ask"'),
+ ("--fix never acts", 'anchor/core/audiosync/audiosync.py', 'return "auto" if getattr(args, "fix", False) else "report"', 'return "report"'),
  ("new writer bypasses the helper", 'anchor/core/new_task.py', None, "def go(subs, path):\n    subs.save(str(path))\n"),
 ]
 

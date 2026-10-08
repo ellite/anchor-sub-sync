@@ -14,8 +14,26 @@ from ...utils import syncverdict
 from ...utils import parakeet
 from ..translation import translate_subtitle_nllb
 
+ALT_TRANSLATIONS = 4   # extra translations kept per cue for matching (see translation.translate_subtitle_nllb)
+
 # Constants
 SUPPORTED_EXTENSIONS = {".srt", ".ass", ".vtt", ".sub"}
+
+def _fix_policy(args, check, queue_len):
+    """What a Sync Check does after reporting a file.
+
+    'auto'   --check --fix (with or without -s): take the advice, never ask
+    'report' --check on the command line (with or without -s): only report, never ask
+    'batch'  several files from the menu: not interrupted, the summary shows what needs fixing
+    'ask'    one file from the menu: offer the fixes
+    None     not a check
+    """
+    if not check:
+        return None
+    if args.subtitle or getattr(args, "report_only", False):
+        return "auto" if getattr(args, "fix", False) else "report"
+    return "batch" if queue_len > 1 else "ask"
+
 
 def _offer_fix(console, result):
     """After an interactive Sync Check: what to do about the finding. Returns 'framerate', 'audio' or None.
@@ -39,7 +57,7 @@ def _offer_fix(console, result):
     return None if choice == "n" else options[int(choice) - 1][0]
 
 
-def _auto_fix_choice(console, result, target, whisper_data, precise, video_fps=None):
+def _auto_fix_choice(console, result, target, whisper_data, precise, video_fps=None, translated=False):
     """Unattended `--check --fix`: takes the check's own advice. Returns 'framerate', 'audio' or None (nothing to do / cannot help).
 
     A subtitle in sync is skipped. A suggested frame rate change (the check only suggests one when a single pair fits) is still tried on
@@ -60,7 +78,7 @@ def _auto_fix_choice(console, result, target, whisper_data, precise, video_fps=N
         _, to_fps = resolve_rate(float(to_label))
         trial = copy.deepcopy(target)
         convert_frame_rate(trial, from_fps, to_fps)
-        after = check_subtitles(trial, whisper_data, precise=precise, video_fps=video_fps)
+        after = check_subtitles(trial, whisper_data, precise=precise, video_fps=video_fps, translated=translated)
         if after["verdict"] in ("in_sync", "loose"):
             console.print(f"[green]🎥 Frame rate {from_label} to {to_label} fps brings it in sync "
                           f"(checked again: average {after['median']:+.1f} s). Applying it.[/green]")
@@ -149,7 +167,13 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
     # PROCESS QUEUE
     file_label = "file" if len(queue) == 1 else "files"
     check = bool(getattr(args, "check", False))      # Sync Check: measure and report, write nothing
+    # --check on the command line (with or without -s) only reports, or with --fix acts on its own: it never asks. The menu entry
+    # for a single file still offers the fixes.
+    policy = _fix_policy(args, check, len(queue))
+    hands_off = policy in ("auto", "report")          # exit code 3 tells a script when something is not in sync
     check_results = []
+    check_entries = []          # for the batch summary: name, video name, result
+    failed_names = []           # files that could not be checked or synced
     performed_sync = False      # a check that went on into an audio sync
     action = ("Batch Sync" if len(queue) > 1 else "Sync") if not check else ("Batch Sync Check" if len(queue) > 1 else "Sync Check")
     console.print(f"\n[bold green]🚀 Starting {action} ({len(queue)} {file_label})...[/bold green]")
@@ -234,11 +258,13 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                     compute_type=compute_type,
                     progress=progress,
                     task_id=task,
-                    cpu_threads=cpu_threads
+                    cpu_threads=cpu_threads,
+                    alternatives=ALT_TRANSLATIONS
                 )
 
             if ghost_sub is None:
                 failed_count += 1
+                failed_names.append(sub.name)
                 continue
 
             console.print(f"[dim]🔄 Translation complete ({sub_lang.upper()} -> {meta_lang.upper()}).[/dim]")
@@ -305,6 +331,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
 
             if whisper_data is None:
                 failed_count += 1
+                failed_names.append(sub.name)
                 continue
 
             # Step 2: Auto-detect mismatch check (only when metadata was missing)
@@ -342,7 +369,8 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                             compute_type=compute_type,
                             progress=progress,
                             task_id=task,
-                            cpu_threads=cpu_threads
+                            cpu_threads=cpu_threads,
+                            alternatives=ALT_TRANSLATIONS
                         )
 
                     if ghost_sub is None:
@@ -357,15 +385,20 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
             if check:
                 video_fps = get_video_fps(vid)
                 target = ghost_sub if (needs_translation and original_sub_object) else open_subtitle(sub)
-                result = check_subtitles(copy.deepcopy(target), whisper_data, precise=parakeet_used, video_fps=video_fps)   # the aligner retimes what it is given
+                result = check_subtitles(copy.deepcopy(target), whisper_data, precise=parakeet_used, video_fps=video_fps, translated=needs_translation)   # the aligner retimes what it is given
                 check_results.append(result)
+                entry = {"name": sub.name, "video": vid.name, "result": result, "action": ""}
+                check_entries.append(entry)
                 syncverdict.print_report(console, sub.name, result)
                 console.print(f"[dim]Checked in {time.time() - start_time:.1f}s.[/dim]")
-                if args.subtitle:
-                    choice = _auto_fix_choice(console, result, target, whisper_data, parakeet_used, video_fps) if getattr(args, "fix", False) else None
-                else:
+                if policy == "auto":
+                    choice = _auto_fix_choice(console, result, target, whisper_data, parakeet_used, video_fps, translated=needs_translation)
+                elif policy == "ask":
                     choice = _offer_fix(console, result)
+                else:
+                    choice = None            # report only / a batch is not interrupted: the summary at the end shows what needs fixing
                 if choice == "framerate":
+                    entry["action"] = f"frame rate {result['fps'][0]} to {result['fps'][1]} fps"
                     from ..framerate.framerate import _retime_file, resolve_rate
                     from_label, from_fps = resolve_rate(float(result["fps"][0]))
                     to_label, to_fps = resolve_rate(float(result["fps"][1]))
@@ -373,6 +406,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                         failed_count += 1
                     continue
                 if choice == "audio":
+                    entry["action"] = "Audio Sync"
                     do_sync = performed_sync = True
                     start_time = time.time()
                 else:
@@ -395,7 +429,8 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
 
             # Step 3: Align & Sync
             if needs_translation and original_sub_object:
-                _, rejected, anchors = align_subtitles(ghost_sub, whisper_data, precise=parakeet_used)
+                _, rejected, anchors = align_subtitles(ghost_sub, whisper_data, precise=parakeet_used, translated=True,
+                                                       match_table=bool(getattr(args, 'match_table', False)))
                 lines = len(original_sub_object)
 
                 console.print("[dim]📥 Applying synced timestamps back to original subtitle...[/dim]")
@@ -427,6 +462,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
 
         except Exception as e:
             failed_count += 1
+            failed_names.append(sub.name)
             console.print(f"[bold red]❌ Failed:[/bold red] {e}")
 
     # Cleanup at very end
@@ -446,9 +482,13 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
         
     console.print(f"\n[{summary_color}]{summary_text}[/{summary_color}]")
 
+    # After a batch check: what to fix, at a glance (a single check already printed its own report)
+    if check and len(queue) > 1 and (check_entries or failed_names):
+        syncverdict.print_summary(console, check_entries, failed_names)
+
     # A script can act on the result: exit code 3 when any checked subtitle is not in sync (unattended mode only).
     # With --fix the fixable ones were fixed, so only a subtitle that cannot be compared is left over.
-    if check and args.subtitle and failed_count == 0:
+    if hands_off and failed_count == 0:
         left = [r for r in check_results if r["verdict"] == "not_comparable"] if getattr(args, "fix", False) else \
                [r for r in check_results if r["verdict"] not in ("in_sync", "loose")]
         if left:

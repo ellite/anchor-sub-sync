@@ -22,6 +22,8 @@ def task(monkeypatch, *argv):
     (["-d"], "download"),
     (["--api"], "api"),
     ([], None),                                           # no arguments: the interactive menu
+    (["--check"], "check"),                               # no -s: the file picker, report only
+    (["--check", "--fix"], "check"),
     (["-s", "a.srt", "--check"], "check"),
     (["-s", "a.srt", "-v", "a.mkv", "--check", "--fix"], "check"),
     (["-s", "a.srt", "--from-fps", "25", "--to-fps", "24"], "framerate"),
@@ -64,3 +66,25 @@ def test_the_menu_entries_map_to_the_tasks_they_are_named_after():
     for number, name in (("1", "audio"), ("2", "reference"), ("3", "point"), ("4", "framerate"), ("5", "check"),
                          ("6", "translate"), ("7", "transcribe"), ("12", "download")):
         assert f'"{number}": "{name}"' in source
+
+
+# ---------------------------------------------------------------- when a Sync Check asks questions
+
+from argparse import Namespace
+
+from anchor.core.audiosync.audiosync import _fix_policy
+
+
+@pytest.mark.parametrize("args, check, queue_len, expected", [
+    (Namespace(subtitle="a.srt", fix=False), True, 1, "report"),                        # anchor -s a.srt --check
+    (Namespace(subtitle="a.srt", fix=True), True, 1, "auto"),                           # ... --check --fix
+    (Namespace(subtitle=None, fix=False, report_only=True), True, 1, "report"),         # anchor --check (picker, one file)
+    (Namespace(subtitle=None, fix=False, report_only=True), True, 5, "report"),         # anchor --check (picker, a batch)
+    (Namespace(subtitle=None, fix=True, report_only=True), True, 5, "auto"),            # anchor --check --fix (picker)
+    (Namespace(subtitle=None, fix=False, report_only=False), True, 1, "ask"),           # menu: Sync Check on one file
+    (Namespace(subtitle=None, fix=False, report_only=False), True, 4, "batch"),         # menu: Sync Check on several files
+    (Namespace(subtitle="a.srt", fix=True), False, 1, None),                            # not a check at all
+])
+def test_a_sync_check_asks_only_from_the_menu_on_a_single_file(args, check, queue_len, expected):
+    """The --check flag means 'just the report': it never asks. Only the menu entry, for one file, offers the fixes."""
+    assert _fix_policy(args, check, queue_len) == expected

@@ -1,4 +1,5 @@
 import contextlib
+import bisect
 import difflib
 import itertools
 import logging
@@ -38,6 +39,10 @@ LEADING_WORD_MAX = 3         # ... for at most this many words
 WEAK_DRIFT_TOL_SEC = 5.0      # reference mode: max distance of a weak match from the strong anchors' drift curve
 STRONG_MATCH_WORDS = 4       # reference mode: a cue with at least this many matched words ...
 STRONG_MATCH_RATIO = 0.6     # ... covering this share of its words skips the drift outlier filter
+# Translated (ghost) subtitles: the translation and the recognition can each go wrong, so a match is trusted sooner.
+TRANSLATED_STRONG_WORDS = 3
+TRANSLATED_STRONG_RATIO = 0.5
+TRANSLATED_WEAK_DRIFT_TOL_SEC = 2.0
 # =============================================
 
 console = Console()
@@ -236,7 +241,7 @@ def enforce_strict_spacing(subs, gap_ms=GAP_MS, min_duration_ms=MIN_DURATION_MS)
     return subs
 
 class GlobalAligner:
-    def __init__(self, original_subs, whisper_data, reference=False, precise=False):
+    def __init__(self, original_subs, whisper_data, reference=False, precise=False, translated=False):
         """
         reference=False: `whisper_data` is Whisper output (word times estimate speech onset).
         reference=True:  `whisper_data` is a trusted subtitle's events ({'text','start','end'}).
@@ -247,12 +252,18 @@ class GlobalAligner:
         self.subs = original_subs
         self.whisper = whisper_data
         self.reference = reference
+        self.translated = translated  # audio mode, the subtitle is a machine translation: be more forgiving (see TRANSLATED_*)
         self.precise = precise      # audio mode with an accurate engine (Parakeet): see smooth_offsets_by_block
         self.anchor_points = []     # (original start, drift, strong) of every valid anchor, for the sync check
         self.candidate_count = 0    # cues with at least one matched word
         self.match_info = {}        # cue index -> (position of its first matched word, that word's time, words matched)
         self.anchor_count = 0  # valid anchors found by the last run()
         self.anchored_idx = set()  # indices of the cues that anchored in the last run()
+        # Other translations of each cue (list of lists of texts, set by the translator on a ghost subtitle): a cue is
+        # matched against all of them and keeps the one that matches most of its words.
+        self.alternatives = None if reference else getattr(original_subs, 'alternatives', None)
+        self.variant = {}           # cue index -> number of the alternative that matched best (absent: the main text)
+        self.cue_report = []        # per cue: (index, start s, text, heard words by position, status), for --match-table
 
     def _match_start(self, matches):
         """Start time of a subtitle cue from its matched words, as (position in cue, token) pairs."""
@@ -295,9 +306,14 @@ class GlobalAligner:
         return estimates[i]
 
     @staticmethod
-    def _is_strong(matched, cue_words):
+    def _is_strong(matched, cue_words, min_words=STRONG_MATCH_WORDS, min_ratio=STRONG_MATCH_RATIO):
         """A cue is confidently placed when enough of its words were found, in order, in the reference."""
-        return matched >= STRONG_MATCH_WORDS and matched >= STRONG_MATCH_RATIO * cue_words
+        return matched >= min_words and matched >= min_ratio * cue_words
+
+    def _strong_limits(self):
+        if self.translated and not self.reference:
+            return TRANSLATED_STRONG_WORDS, TRANSLATED_STRONG_RATIO
+        return STRONG_MATCH_WORDS, STRONG_MATCH_RATIO
 
     @staticmethod
     def _edge_extra(slope, distance):
@@ -343,10 +359,40 @@ class GlobalAligner:
                 changed += 1
         return changed
 
-    def _tokenize_subs(self):
+    def _build_cue_report(self, sub_tokens):
+        """Fills cue_report: for every cue, the word heard at each matched position ('' where nothing matched)."""
+        total = {}
+        for t in sub_tokens:
+            total[t['sub_idx']] = t['n']
+        self.cue_report = []
+        points = sorted(self.anchor_points)
+        xs = [p[0] for p in points]
+        ds = [p[1] for p in points]
+        times = [t['start'] for t in self.speech_tokens]
+        for idx, sub in enumerate(self.subs):
+            k = self.variant.get(idx)
+            text = sub.text if k is None else '↻ ' + self.alternatives[k - 1][idx]
+            heard = [''] * (total.get(idx, 0) if k is None else self.cue_words[idx])
+            for pos, tok in self.sub_matches.get(idx, []):
+                heard[pos] = tok['word']
+            if idx in self.anchored_idx:
+                status = 'anchored'
+            elif self.sub_matches.get(idx):
+                status = 'rejected'
+            else:
+                status = 'unmatched'
+            # What the speech recognition produced where this cue is expected (drift curve of the anchors), to see why words did not match
+            start = sub.start / 1000.0
+            expected = start + (float(np.interp(start, xs, ds)) if xs else 0.0)
+            lo = bisect.bisect_left(times, expected - 0.5)
+            hi = bisect.bisect_right(times, expected + (sub.end - sub.start) / 1000.0 + 1.0)
+            around = [t['word'] for t in self.speech_tokens[lo:hi]]
+            self.cue_report.append((idx, start, text, heard, status, around))
+
+    def _tokenize_subs(self, texts=None):
         sub_words = []
         for idx, sub in enumerate(self.subs):
-            text = clean_text(sub.text) 
+            text = clean_text(sub.text if texts is None else texts[idx])
             words = text.split()
             for i, w in enumerate(words):
                 if w.strip():
@@ -370,6 +416,18 @@ class GlobalAligner:
                     whisper_words.append({"word": w.strip(), "start": seg['start'] + i*wd, "ev_start": seg['start'], "ev_end": seg['end'], "n": len(words), "pos": i, "rate": wd})
         return whisper_words
 
+    def _match(self, sub_tokens, wh_tokens):
+        """Global word alignment. Returns ({cue: [(position in cue, speech token)]}, {cue: word count of the matched text})."""
+        matcher = difflib.SequenceMatcher(None, [x['word'] for x in sub_tokens], [x['word'] for x in wh_tokens], autojunk=False)
+        sub_matches = {i: [] for i in range(len(self.subs))}
+        cue_words = {}
+        for match in matcher.get_matching_blocks():
+            for i in range(match.size):
+                sub_token = sub_tokens[match.a + i]
+                cue_words[sub_token['sub_idx']] = sub_token['n']
+                sub_matches[sub_token['sub_idx']].append((sub_token['pos'], wh_tokens[match.b + i]))
+        return sub_matches, cue_words
+
     def run(self):
         console.print("[dim]   🧩 Tokenizing data...[/dim]")
         sub_tokens = self._tokenize_subs()
@@ -377,21 +435,24 @@ class GlobalAligner:
         if not self.reference:
             self._snap_to_script(sub_tokens, wh_tokens)
         
-        sub_strs = [x['word'] for x in sub_tokens]
-        wh_strs = [x['word'] for x in wh_tokens]
+        console.print(f"[dim]   📐 Global Alignment ({len(sub_tokens)} vs {len(wh_tokens)} words)...[/dim]")
+        sub_matches, cue_words = self._match(sub_tokens, wh_tokens)
 
-        console.print(f"[dim]   📐 Global Alignment ({len(sub_strs)} vs {len(wh_strs)} words)...[/dim]")
-        matcher = difflib.SequenceMatcher(None, sub_strs, wh_strs, autojunk=False)
-        matches = matcher.get_matching_blocks()
-        
-        sub_matches = {i: [] for i in range(len(self.subs))}
-        cue_words = {}
-        for match in matches:
-            for i in range(match.size):
-                sub_token = sub_tokens[match.a + i]
-                cue_words[sub_token['sub_idx']] = sub_token['n']
-                sub_matches[sub_token['sub_idx']].append((sub_token['pos'], wh_tokens[match.b + i]))
+        if self.alternatives:
+            for k, texts in enumerate(self.alternatives, 1):
+                alt_tokens = self._tokenize_subs(texts)
+                alt_wh = self._tokenize_whisper()
+                self._snap_to_script(alt_tokens, alt_wh)
+                alt_matches, alt_words = self._match(alt_tokens, alt_wh)
+                for idx, found in alt_matches.items():
+                    if len(found) > len(sub_matches[idx]):
+                        sub_matches[idx], cue_words[idx] = found, alt_words[idx]
+                        self.variant[idx] = k
+            console.print(f"[dim]   🔀 {len(self.variant)} cue(s) matched better with another translation.[/dim]")
 
+        self.sub_matches = sub_matches
+        self.cue_words = cue_words
+        self.speech_tokens = wh_tokens
         self.match_info = {i: (m[0][0], m[0][1]['start'], len(m)) for i, m in sub_matches.items() if m}
 
         candidates = []
@@ -405,7 +466,7 @@ class GlobalAligner:
                     'raw_match_time': match_start, 'drift': drift,
                     'end_time': self._match_end(sub_matches[idx], cue_words[idx]),
                     'first_pos': sub_matches[idx][0][0],
-                    'strong': (self.reference or AUDIO_STRONG_ANCHORS) and self._is_strong(len(sub_matches[idx]), cue_words[idx])
+                    'strong': (self.reference or AUDIO_STRONG_ANCHORS) and self._is_strong(len(sub_matches[idx]), cue_words[idx], *self._strong_limits())
                 })
 
         if not candidates: return None, 0
@@ -419,7 +480,7 @@ class GlobalAligner:
         # not against their neighbours' median, because two subtitle releases rarely differ by a
         # uniform offset (it can move by seconds from one cue to the next).
         strong = [c for c in candidates if c['strong']]
-        weak_tol = WEAK_DRIFT_TOL_SEC if self.reference else AUDIO_WEAK_DRIFT_TOL_SEC
+        weak_tol = WEAK_DRIFT_TOL_SEC if self.reference else (TRANSLATED_WEAK_DRIFT_TOL_SEC if self.translated else AUDIO_WEAK_DRIFT_TOL_SEC)
         trusted = len(strong) >= 2 and weak_tol is not None
         if trusted:
             strong_x = [c['orig_start'] for c in strong]
@@ -458,6 +519,7 @@ class GlobalAligner:
         self.anchored_idx = {a['idx'] for a in raw_anchors}
         self.anchor_points = [(a['orig_start'], a['raw_match_time'] - a['orig_start'], bool(a['strong'])) for a in raw_anchors]
         self.candidate_count = len(candidates)
+        self._build_cue_report(sub_tokens)
         
         anchors = anchor_exactly(raw_anchors) if self.reference else smooth_offsets_by_block(raw_anchors, precise=self.precise)
         
