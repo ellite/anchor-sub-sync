@@ -2,6 +2,23 @@
 
 
 
+## v2.1.0 (2026-10-09)
+
+### Feature
+
+* feat: sync check asks for the fix by default, --report only reports ([`f5144c4`](https://github.com/ellite/anchor-sub-sync/commit/f5144c4aa6e751c4f0b93e486fb2f69fe4d69814))
+
+* feat: match cues against alternative translations, forgiving rules for translated subtitles, match table, sync check never asks ([`0828a11`](https://github.com/ellite/anchor-sub-sync/commit/0828a11ec8e96af807268906e364fd09c33b7f6f))
+
+### Fix
+
+* fix: sync check no longer suggests a frame rate change for a far-off start or a wandering offset ([`b80a5f5`](https://github.com/ellite/anchor-sub-sync/commit/b80a5f5fff82b06693aeb2a49a513f6f5b551b3a))
+
+* fix: always mark machine translations .ai in the output name ([`a4d5a59`](https://github.com/ellite/anchor-sub-sync/commit/a4d5a591db51d915483929ec2ebe16686578911c))
+
+* fix: match initialisms in subtitle titles and pick the right episode from SubDL season packs ([`263d662`](https://github.com/ellite/anchor-sub-sync/commit/263d662931d29b9b69c8d7de3de92c1b501eb8fd))
+
+
 ## v2.0.0 (2026-10-07)
 
 ### Breaking
