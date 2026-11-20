@@ -2,6 +2,36 @@
 
 
 
+## v2.2.0 (2026-11-20)
+
+### Feature
+
+* feat: validate --language up front, keep Whisper timestamps when no align model exists, add --align-model ([`7a086d4`](https://github.com/ellite/anchor-sub-sync/commit/7a086d4e267dbefb180dce1576e42823bed5d107))
+
+* feat: merge PR #7, improve language detection with multi-sampling
+
+# Conflicts:
+#	anchor/utils/whisper.py ([`72c5bee`](https://github.com/ellite/anchor-sub-sync/commit/72c5bee2b088491bd6f406916fd6960ece32248f))
+
+* feat: API mode queues audio sync jobs and transcribes segments over HTTP ([`48e3f4e`](https://github.com/ellite/anchor-sub-sync/commit/48e3f4eebe25503d6de00341812e761a6e3a6b5e))
+
+### Fix
+
+* fix: sample language with detect_language, warn on failed samples, break ties on the middle sample, test it ([`ee45abe`](https://github.com/ellite/anchor-sub-sync/commit/ee45abedea65b64e1f4c896fb955933781c079ad))
+
+* fix: free the repair Whisper model and CUDA cache even when a zone fails ([`81d9203`](https://github.com/ellite/anchor-sub-sync/commit/81d920351492e3de7fc2785b49588218c37b27b6))
+
+### Refactor
+
+* refactor: move fix_policy to syncverdict and translated_stem to utils.files ([`d4f82b9`](https://github.com/ellite/anchor-sub-sync/commit/d4f82b922ac1bab90769a038eed6f1531d816638))
+
+### Unknown
+
+* Modify funding sources in FUNDING.yml
+
+Updated funding options to include GitHub Sponsors and a custom PayPal link. ([`545a8bb`](https://github.com/ellite/anchor-sub-sync/commit/545a8bb4a5922647a0a38ee28b0ccc45642c265b))
+
+
 ## v2.1.0 (2026-10-09)
 
 ### Feature
@@ -118,11 +148,19 @@
 
 ## v1.15.1 (2026-05-29)
 
+### Feature
+
+* feat: improve language detection with multi-sampling ([`f517c43`](https://github.com/ellite/anchor-sub-sync/commit/f517c43d83c6c61695cb00a834bf30b5a725b3d1))
+
 ### Fix
 
 * fix: gargabe translation text after transformers update ([`69a009f`](https://github.com/ellite/anchor-sub-sync/commit/69a009f1ffb1f72a0f808d47b1f82b1a100b012c))
 
 ### Unknown
+
+* Update whisper.py
+
+Changed wording for clarity. ([`3fe9077`](https://github.com/ellite/anchor-sub-sync/commit/3fe907700a09c3453ba695b6e2eb11af81af7228))
 
 * Update contributors link in README.md ([`948a982`](https://github.com/ellite/anchor-sub-sync/commit/948a98245d42058b8e1271d4a1d1a113c6967da3))
 
