@@ -4,6 +4,7 @@ import curses
 import pysubs2
 from rich.console import Console
 from pathlib import Path
+from .mappings import ISO_639_MAPPING
 
 console = Console()
 
@@ -326,3 +327,18 @@ def _picker_loop(stdscr, options, title, multi_select, header_lines):
                 return [current_row]
         elif key == 27 or key == ord('q'): 
             return []
+
+
+def translated_stem(stem: str, source_lang: str, target_lang: str) -> str:
+    """File name (without extension) of a machine translation: always marked `.ai`.
+
+    The source's own language token (`.pt`, `.por`, `.pt-BR`, matched exactly, last one wins) is replaced by `<target>.ai`;
+    a name without one gets `.<target>.ai` appended. A source that is already `.ai` does not get a second one.
+    """
+    parts = stem.split(".")
+    for i in range(len(parts) - 1, 0, -1):
+        base = parts[i].lower().split("-")[0].split("_")[0]
+        if ISO_639_MAPPING.get(base, base) == (source_lang or "").lower():
+            rest = [p for p in parts[i + 1:] if p.lower() != "ai"]
+            return ".".join(parts[:i] + [target_lang, "ai"] + rest)
+    return ".".join([p for p in parts if p.lower() != "ai"] + [target_lang, "ai"])

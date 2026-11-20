@@ -79,7 +79,7 @@ def test_the_menu_entries_map_to_the_tasks_they_are_named_after():
 
 from argparse import Namespace
 
-from anchor.core.audiosync.audiosync import _fix_policy
+from anchor.utils.syncverdict import fix_policy as _fix_policy
 
 
 @pytest.mark.parametrize("args, check, interactive, expected", [

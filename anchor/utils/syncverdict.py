@@ -286,3 +286,20 @@ def print_summary(console, entries, failed=()):
         console.print("\n[bold]To fix the files that need it[/bold] [dim](each takes the check's own advice: a verified frame rate change, else Audio Sync)[/dim]")
         for entry in fixable:
             console.print(f"   anchor -s {shlex.quote(entry['name'])} -v {shlex.quote(entry['video'])} --check --fix", markup=False, highlight=False)
+
+
+def fix_policy(args, check, interactive=True):
+    """What a Sync Check does after reporting a file.
+
+    'auto'   --fix: take the advice, never ask
+    'report' --report (or no terminal to ask on): only report
+    'ask'    otherwise, for every file (also in a batch): offer the fixes (the default)
+    None     not a check
+    """
+    if not check:
+        return None
+    if getattr(args, "fix", False):
+        return "auto"
+    if getattr(args, "report", False) or not interactive:
+        return "report"
+    return "ask"

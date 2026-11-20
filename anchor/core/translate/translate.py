@@ -3,27 +3,13 @@ from pathlib import Path
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
-from ...utils.files import select_files_interactive, open_subtitle, get_files, resolve_output
+from ...utils.files import select_files_interactive, open_subtitle, get_files, resolve_output, translated_stem
 from ...utils.languages import get_subtitle_language
 from ...utils.mappings import get_language_code_for_nllb, ISO_639_MAPPING
 from ..translation import translate_subtitle_nllb
 
 SUPPORTED_EXTENSIONS = {".srt", ".ass", ".vtt", ".sub"}
 
-
-def translated_stem(stem: str, source_lang: str, target_lang: str) -> str:
-    """File name (without extension) of a machine translation: always marked `.ai`.
-
-    The source's own language token (`.pt`, `.por`, `.pt-BR`, matched exactly, last one wins) is replaced by `<target>.ai`;
-    a name without one gets `.<target>.ai` appended. A source that is already `.ai` does not get a second one.
-    """
-    parts = stem.split(".")
-    for i in range(len(parts) - 1, 0, -1):
-        base = parts[i].lower().split("-")[0].split("_")[0]
-        if ISO_639_MAPPING.get(base, base) == (source_lang or "").lower():
-            rest = [p for p in parts[i + 1:] if p.lower() != "ai"]
-            return ".".join(parts[:i] + [target_lang, "ai"] + rest)
-    return ".".join([p for p in parts if p.lower() != "ai"] + [target_lang, "ai"])
 
 def run_translation(args, device, translation_model, compute_type, console: Console, cpu_threads=0):
     if args.subtitle and args.language:

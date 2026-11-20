@@ -1,6 +1,6 @@
 import pytest
 
-from anchor.core.translate.translate import translated_stem
+from anchor.utils.files import translated_stem
 
 
 @pytest.mark.parametrize("stem, source, target, expected", [

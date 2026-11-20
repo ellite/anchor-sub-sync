@@ -11,6 +11,7 @@ from ...utils.mappings import get_language_code_for_nllb
 from ...utils.languages import get_audio_language, get_subtitle_language, get_video_fps
 from ...utils.whisper import run_whisper_transcription, run_anchor_align_and_sync, align_subtitles, load_whisper_model, check_subtitles
 from ...utils import syncverdict
+from ...utils.syncverdict import fix_policy as _fix_policy
 from ...utils import parakeet
 from ..translation import translate_subtitle_nllb
 
@@ -18,23 +19,6 @@ ALT_TRANSLATIONS = 4   # extra translations kept per cue for matching (see trans
 
 # Constants
 SUPPORTED_EXTENSIONS = {".srt", ".ass", ".vtt", ".sub"}
-
-def _fix_policy(args, check, interactive=True):
-    """What a Sync Check does after reporting a file.
-
-    'auto'   --fix: take the advice, never ask
-    'report' --report (or no terminal to ask on): only report
-    'ask'    otherwise, for every file (also in a batch): offer the fixes (the default)
-    None     not a check
-    """
-    if not check:
-        return None
-    if getattr(args, "fix", False):
-        return "auto"
-    if getattr(args, "report", False) or not interactive:
-        return "report"
-    return "ask"
-
 
 def _offer_fix(console, result):
     """After an interactive Sync Check: what to do about the finding. Returns 'framerate', 'audio' or None.
@@ -464,6 +448,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
             if not needs_translation:
                 console.print(f" 💾 Saved to: [underline]{final_output_path.name}[/underline]")
 
+
         except Exception as e:
             failed_count += 1
             failed_names.append(sub.name)
@@ -471,6 +456,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
 
     # Cleanup at very end
     free_whisper()
+
     
     total_duration = time.time() - total_start
     
