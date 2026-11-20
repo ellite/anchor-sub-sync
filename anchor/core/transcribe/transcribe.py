@@ -28,7 +28,7 @@ logging.getLogger("faster_whisper").setLevel(logging.ERROR)
 
 from ...utils.files import select_files_interactive, get_files, unique_path, resolve_output
 from ...utils.alignment import quiet_library_logs
-from ...utils.languages import get_audio_language
+from ...utils.languages import get_audio_language, check_whisper_language, align_model_missing
 
 # ==========================================
 # ⚙️ CONFIGURATION CONSTANTS
@@ -808,6 +808,15 @@ def get_progress(console):
         transient=True
     )
 
+def _default_align_codes():
+    """Languages for which whisperx ships a default alignment model, or None when that list cannot be read (the check is then skipped)."""
+    try:
+        from whisperx.alignment import DEFAULT_ALIGN_MODELS_TORCH, DEFAULT_ALIGN_MODELS_HF
+        return set(DEFAULT_ALIGN_MODELS_TORCH) | set(DEFAULT_ALIGN_MODELS_HF)
+    except Exception:
+        return None
+
+
 def run_transcription(args, device, model_size, compute_type, console: Console, cpu_threads=0):
     console.print("\n[bold green]📝  Video/Audio Transcription[/bold green]")
     
@@ -823,6 +832,13 @@ def run_transcription(args, device, model_size, compute_type, console: Console, 
         if not selected: return
         inputs = [Path(p) for p in selected]
 
+    forced_lang = None
+    if getattr(args, "language", None):
+        forced_lang, problem = check_whisper_language(args.language)
+        if problem:
+            console.print(f"[bold red]❌ Invalid --language:[/bold red] {problem}")
+            return
+
     for input_path in inputs:
         if not input_path.exists():
             console.print(f"[bold red]❌ File not found:[/bold red] {input_path}")
@@ -831,8 +847,12 @@ def run_transcription(args, device, model_size, compute_type, console: Console, 
         # --- Language Pre-Check ---
         detected_lang = None
         if hasattr(args, 'language') and args.language:
-            detected_lang = args.language
+            detected_lang = forced_lang
             console.print(f"\n   🌍 Language: [dim] {detected_lang.upper()} (Forced)[/dim]")
+            align_codes = _default_align_codes()
+            if align_codes is not None and align_model_missing(detected_lang, align_codes, getattr(args, "align_model", None)):
+                console.print(f"[yellow]   ⚠️ whisperx has no phoneme alignment model for {detected_lang.upper()}: cue timing will come from Whisper's own "
+                              f"timestamps. Pass --align-model <wav2vec2 model> to use one.[/yellow]")
         else:
             try:
                 detected_lang = get_audio_language(input_path)
@@ -1011,18 +1031,27 @@ def run_transcription(args, device, model_size, compute_type, console: Console, 
                         out["text"] = cleaned_text
                         clean_segments.append(out)
                 
-                model_a, metadata = whisperx.load_align_model(language_code=actual_lang, device=device)
-                audio = whisperx.load_audio(str(input_path))
-                with quiet_library_logs():
-                    result = whisperx.align(clean_segments, model_a, metadata, audio, device, return_char_alignments=False)
-                aligned_segments = result["segments"]
-                trim_stretched_leading_words(aligned_segments)
-                
-                del model_a
-                gc.collect()
-                if device == "cuda": torch.cuda.empty_cache()
-            
-            console.print("[dim]🔬 Phoneme alignment complete.[/dim]")
+                # A language without an alignment model (or a failing one) must not throw the transcript away: keep Whisper's own
+                # segment timestamps, as audio sync does (the aligner below spreads the words evenly over each segment).
+                try:
+                    model_a, metadata = whisperx.load_align_model(language_code=actual_lang, device=device,
+                                                                  model_name=getattr(args, "align_model", None))
+                    audio = whisperx.load_audio(str(input_path))
+                    with quiet_library_logs():
+                        result = whisperx.align(clean_segments, model_a, metadata, audio, device, return_char_alignments=False)
+                    aligned_segments = result["segments"]
+                    trim_stretched_leading_words(aligned_segments)
+
+                    del model_a
+                    gc.collect()
+                    if device == "cuda": torch.cuda.empty_cache()
+                    aligned = True
+                except Exception as e:
+                    console.print(f"[yellow]⚠️ Phoneme alignment unavailable for {str(actual_lang).upper()} ({e}). Using Whisper's segment timestamps.[/yellow]")
+                    aligned_segments = clean_segments
+                    aligned = False
+
+            console.print("[dim]🔬 Phoneme alignment complete.[/dim]" if aligned else "[dim]🔬 Phoneme alignment skipped.[/dim]")
 
             # --- SAVE ---
             with get_progress(console) as p:

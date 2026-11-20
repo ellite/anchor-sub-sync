@@ -80,6 +80,13 @@ def parse_arguments():
         default=None
     )
     parser.add_argument(
+        "--align-model",
+        type=str,
+        help=("Hugging Face wav2vec2 model for phoneme alignment, for languages that have no default one "
+              "(e.g. sr: dnikolic/wav2vec2-xlsr-530-serbian-colab). Without it such a language keeps Whisper's own timestamps."),
+        default=None
+    )
+    parser.add_argument(
         "-l", "--language",
         type=str,
         help="For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation or download.",

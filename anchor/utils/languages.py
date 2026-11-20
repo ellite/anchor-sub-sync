@@ -101,3 +101,32 @@ def detect_language_by_sampling(model, audio, warn=None):
     if count == 1 and len(guesses) > 1:
         return next((code for point, code in guesses if point == TIE_BREAK_POINT), guesses[0][1])
     return top
+
+
+# Languages faster-whisper accepts for `language=` (one per file; it has no language lists).
+WHISPER_LANGUAGES = frozenset(
+    "af am ar as az ba be bg bn bo br bs ca cs cy da de el en es et eu fa fi fo fr gl gu ha haw he hi hr ht hu hy id is it ja jw ka kk km "
+    "kn ko la lb ln lo lt lv mg mi mk ml mn mr ms mt my ne nl nn no oc pa pl ps pt ro ru sa sd si sk sl sn so sq sr su sv sw ta te tg tk tl "
+    "tr tt uk ur uz vi yi yo zh yue".split())
+
+
+def check_whisper_language(code):
+    """Checks a forced `--language` for the transcribe task before any work starts.
+
+    Returns (normalised_code, None) or (None, message). Whisper takes exactly one language per file, so a list such as `en,fr,uk,ru`
+    is refused with that explanation instead of failing in step 1 (after hours on a long file).
+    """
+    value = (code or "").strip().lower()
+    if not value:
+        return None, "The language is empty."
+    if any(sep in value for sep in ",;/ "):
+        return None, (f"'{code}' is a list of languages, but Whisper transcribes one language per file. Pass one code (e.g. --language en), "
+                      "or leave --language out to let Anchor detect it.")
+    if value not in WHISPER_LANGUAGES:
+        return None, f"'{code}' is not a language Whisper knows. Valid codes: {', '.join(sorted(WHISPER_LANGUAGES))}."
+    return value, None
+
+
+def align_model_missing(code, default_codes, custom_model=None):
+    """True when phoneme alignment cannot run for `code`: no --align-model given and whisperx has no default for the language."""
+    return not custom_model and (code or "").lower() not in default_codes

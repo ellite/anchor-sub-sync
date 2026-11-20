@@ -318,7 +318,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
                     console.print(f"[yellow]⚠️ Parakeet failed ({e}). Using Whisper.[/yellow]")
             if not parakeet_used:
                 ensure_whisper_loaded()
-                whisper_data, detected_lang = run_whisper_transcription(vid, device, compute_type, batch_size, current_model, meta_lang, model_name=target_model, cpu_threads=cpu_threads)
+                whisper_data, detected_lang = run_whisper_transcription(vid, device, compute_type, batch_size, current_model, meta_lang, model_name=target_model, cpu_threads=cpu_threads, align_model=getattr(args, 'align_model', None))
 
             if whisper_data is None:
                 failed_count += 1

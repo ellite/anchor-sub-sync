@@ -96,7 +96,7 @@ def repair_suspicious_segments(segments, video_path, model_name, device, compute
     return segs, zone_count, repaired
 
 
-def run_whisper_transcription(video_path, device, compute_type, batch_size, model, language=None, model_name=None, cpu_threads=0):
+def run_whisper_transcription(video_path, device, compute_type, batch_size, model, language=None, model_name=None, cpu_threads=0, align_model=None):
     """Transcribes audio and aligns phonemes. Returns (whisper_data, detected_lang) or (None, None) on failure.
 
     model_name (the Whisper model size) enables the repair pass for suspicious zones; without it that pass is skipped.
@@ -205,7 +205,7 @@ def run_whisper_transcription(video_path, device, compute_type, batch_size, mode
         progress.add_task("[cyan] Aligning phonemes...", total=None)
 
         try:
-            model_a, metadata = whisperx.load_align_model(language_code=detected_lang, device=device)
+            model_a, metadata = whisperx.load_align_model(language_code=detected_lang, device=device, model_name=align_model)
             audio_for_align = whisperx.load_audio(str(video_path))
 
             with quiet_library_logs():
