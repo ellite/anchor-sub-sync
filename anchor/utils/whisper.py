@@ -63,33 +63,35 @@ def repair_suspicious_segments(segments, video_path, model_name, device, compute
     segs = [dict(s) for s in segments]
     zone_count = repaired = 0
     fw = None   # one faster-whisper model for every zone, loaded when the first zone needs it
-    for padding in (T.REPAIR_PADDING_PASS_1, T.REPAIR_PADDING_PASS_2):
-        suspicious = [i for i, seg in enumerate(segs) if T.is_suspicious(seg, i, segs)]
-        if not suspicious:
-            break
-        zones = T.merge_suspicious_zones(suspicious)
-        if padding == T.REPAIR_PADDING_PASS_1:
-            zone_count = len(zones)
-        for z_start, z_end in reversed(zones):
-            bad = segs[z_start:z_end + 1]
-            original = [dict(s, text=T.clean_text(s.get("text", ""))) for s in bad if T.clean_text(s.get("text", ""))]
-            if fw is None:
-                fw = T.WhisperModel(model_name, device=device, compute_type=compute_type, cpu_threads=cpu_threads)
-            fixed = T.repair_zone_best(model_name, device, compute_type, video_path, bad, padding, language, cpu_threads, whisper_model=fw)
-            if T.zone_quality_score(fixed) > T.zone_quality_score(original) + 0.3:
-                final = fixed
-                repaired += 1
-            else:
-                final = original
-            segs[z_start:z_end + 1] = final
-            first, last = z_start, z_start + len(final) - 1
-            segs = T.stitch_boundaries(segs, first, last)
-            segs = T.dedupe_window(segs, first, last)
-        segs = T.cleanup_redundancies(segs)
-    if fw is not None:
-        del fw
-        gc.collect()
-        if device == "cuda": torch.cuda.empty_cache()
+    try:
+        for padding in (T.REPAIR_PADDING_PASS_1, T.REPAIR_PADDING_PASS_2):
+            suspicious = [i for i, seg in enumerate(segs) if T.is_suspicious(seg, i, segs)]
+            if not suspicious:
+                break
+            zones = T.merge_suspicious_zones(suspicious)
+            if padding == T.REPAIR_PADDING_PASS_1:
+                zone_count = len(zones)
+            for z_start, z_end in reversed(zones):
+                bad = segs[z_start:z_end + 1]
+                original = [dict(s, text=T.clean_text(s.get("text", ""))) for s in bad if T.clean_text(s.get("text", ""))]
+                if fw is None:
+                    fw = T.WhisperModel(model_name, device=device, compute_type=compute_type, cpu_threads=cpu_threads)
+                fixed = T.repair_zone_best(model_name, device, compute_type, video_path, bad, padding, language, cpu_threads, whisper_model=fw)
+                if T.zone_quality_score(fixed) > T.zone_quality_score(original) + 0.3:
+                    final = fixed
+                    repaired += 1
+                else:
+                    final = original
+                segs[z_start:z_end + 1] = final
+                first, last = z_start, z_start + len(final) - 1
+                segs = T.stitch_boundaries(segs, first, last)
+                segs = T.dedupe_window(segs, first, last)
+            segs = T.cleanup_redundancies(segs)
+    finally:
+        if fw is not None:
+            del fw
+            gc.collect()
+            if device == "cuda": torch.cuda.empty_cache()
     return segs, zone_count, repaired
 
 
