@@ -89,7 +89,9 @@ def parse_arguments():
     parser.add_argument(
         "-l", "--language",
         type=str,
-        help="For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation or download.",
+        help=("Language code for unattended mode, meaning depends on the task: with -s, the target language to translate to (one code, e.g. 'pt'); "
+              "with -d, the subtitle languages to download (a comma list, e.g. 'en,fr'); with -v alone, the spoken language to "
+              "transcribe (one code, e.g. 'sr'; leave out to detect it)."),
         default=None
     )
     parser.add_argument(

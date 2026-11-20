@@ -518,7 +518,7 @@ You can override the automatic hardware detection or control specific settings u
 | --fix | | With `--check`: act on the advice without asking (not with `--report`). Subtitles in sync are skipped, a suggested frame rate change is applied (after verifying it), otherwise Audio Sync runs. |
 | --from-fps | | For unattended frame rate change (with `-s` and `--to-fps`): the frame rate the subtitle was made for, e.g. `23.976`. |
 | --to-fps | | For unattended frame rate change (with `-s` and `--from-fps`): the frame rate of your video, e.g. `25`. |
-| --language | -l | For unattended mode, provide the target language code (e.g. 'en', 'pt', 'fr') for translation or download |
+| --language | -l | Language code for unattended mode; its meaning depends on the task. With `-s`: the target language to translate to (one code, e.g. `pt`). With `-d`: the subtitle languages to download (a comma list, e.g. `en,fr`). With `-v` alone: the spoken language to transcribe (one code, e.g. `sr`; leave it out to detect it) |
 | --align-model | | Hugging Face wav2vec2 model for phoneme alignment, for languages without a default one (e.g. `sr`: `dnikolic/wav2vec2-xlsr-530-serbian-colab`). Without it, such a language keeps Whisper's own timestamps. |
 | --download | -d | For unattended mode, automatically download subtitles. Provide -v with the video file path, or anchor downloads subtitles for all videos in the directory. |
 | --missing | | With `-d`: only download what is missing. A video that already has a subtitle for a requested language (`<video>.<lang>*.srt` next to it) is skipped for that language, and skipped entirely when none is left. |
