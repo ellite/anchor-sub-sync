@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+from collections import Counter
 from langdetect import detect, LangDetectException
 from pathlib import Path
 from .files import open_subtitle
@@ -63,3 +64,40 @@ def get_subtitle_language(sub_path: Path) -> str:
 
     except (LangDetectException, ValueError, Exception) as e:
         return "unknown"
+
+SAMPLE_RATE = 16000
+SAMPLE_POINTS = (0.15, 0.50, 0.85)   # where in the file the language is sampled (fraction of its length)
+SAMPLE_SECONDS = 30                  # Whisper's detection window
+MIN_SAMPLED_SECONDS = 120            # shorter audio: one detection at the start is enough
+TIE_BREAK_POINT = 0.50               # when all samples disagree, the middle of the file is the likeliest to hold speech
+
+
+def detect_language_by_sampling(model, audio, warn=None):
+    """Audio language from three 30 s samples (15 %, 50 %, 85 %) instead of only the first 30 s, majority vote.
+
+    Whisper detects from the first 30 s it is given, so a silent logo or a long musical intro can decide the language of the whole
+    file. `model` is a whisperx pipeline (`model.detect_language(audio_slice)` returns a code: one encoder pass, no VAD, no decoding).
+    A sample that fails is reported through `warn(message)` and skipped. When all samples differ the middle one wins. Returns None for
+    audio under 2 minutes or when no sample gave an answer; the caller then lets Whisper detect on its own.
+    """
+    total = len(audio)
+    window = SAMPLE_SECONDS * SAMPLE_RATE
+    if total < MIN_SAMPLED_SECONDS * SAMPLE_RATE:
+        return None
+    guesses = []
+    for point in SAMPLE_POINTS:
+        start = min(int(point * total), total - window)    # the last sample is a full window, not a truncated tail
+        try:
+            code = model.detect_language(audio[start:start + window])
+        except Exception as e:
+            if warn:
+                warn(f"Language sample at {int(point * 100)}% failed: {e}")
+            continue
+        if code and code != "unknown":
+            guesses.append((point, code))
+    if not guesses:
+        return None
+    (top, count), = Counter(code for _, code in guesses).most_common(1)
+    if count == 1 and len(guesses) > 1:
+        return next((code for point, code in guesses if point == TIE_BREAK_POINT), guesses[0][1])
+    return top

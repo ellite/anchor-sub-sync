@@ -58,6 +58,12 @@ M = [
  ("repair zone reach 12 -> 1 s", 'anchor/utils/parakeet.py', "ZONE_REACH_SEC = 12.0", "ZONE_REACH_SEC = 1.0"),
  ("segment pause 0.8 -> 10 s", 'anchor/utils/parakeet.py', "SEGMENT_GAP_SEC = 0.8", "SEGMENT_GAP_SEC = 10.0"),
  ("stretched word limit 1.5 -> 100 s", 'anchor/core/transcribe/transcribe.py', "STRETCHED_WORD_SEC = 1.5", "STRETCHED_WORD_SEC = 100.0"),
+ ("language sampling at 15/50/85 -> 10/50/90", 'anchor/utils/languages.py', "SAMPLE_POINTS = (0.15, 0.50, 0.85)", "SAMPLE_POINTS = (0.10, 0.50, 0.90)"),
+ ("language sampling threshold 120 -> 60 s", 'anchor/utils/languages.py', "MIN_SAMPLED_SECONDS = 120", "MIN_SAMPLED_SECONDS = 60"),
+ ("language sample window 30 -> 20 s", 'anchor/utils/languages.py', "SAMPLE_SECONDS = 30 ", "SAMPLE_SECONDS = 20 "),
+ ("language sample tail not clamped", 'anchor/utils/languages.py', "start = min(int(point * total), total - window)", "start = int(point * total)"),
+ ("language tie takes the first sample", 'anchor/utils/languages.py', "if point == TIE_BREAK_POINT), guesses[0][1])", "if False), guesses[0][1])"),
+ ("language failure not reported", 'anchor/utils/languages.py', "            if warn:\n                warn(", "            if False:\n                warn("),
 ]
 
 A2='anchor/utils/alignment.py'; V2='anchor/utils/syncverdict.py'; PK='anchor/utils/parakeet.py'; TR='anchor/core/transcribe/transcribe.py'
@@ -94,8 +100,8 @@ M += [
  ("--check without -s opens the menu", 'anchor/cli.py', '    if args.check or args.report:\n        return "check"', '    if (args.check or args.report) and args.subtitle:\n        return "check"'),
  ("frame rate suggested for a far-off start", V2, 'and abs(intercept) > FPS_INTERCEPT_SEC', 'and False'),
  ("frame rate suggested for a wandering offset", V2, 'and not shifted and wobble > FPS_LINE_FIT_SEC', 'and not shifted and False'),
- ("--report still offers the fixes", 'anchor/core/audiosync/audiosync.py', 'if getattr(args, "report", False) or not interactive:', 'if not interactive:'),
- ("--fix asks instead of acting", 'anchor/core/audiosync/audiosync.py', '    if getattr(args, "fix", False):\n        return "auto"', '    if False:\n        return "auto"'),
+ ("--report still offers the fixes", 'anchor/utils/syncverdict.py', 'if getattr(args, "report", False) or not interactive:', 'if not interactive:'),
+ ("--fix asks instead of acting", 'anchor/utils/syncverdict.py', '    if getattr(args, "fix", False):\n        return "auto"', '    if False:\n        return "auto"'),
  ("new writer bypasses the helper", 'anchor/core/new_task.py', None, "def go(subs, path):\n    subs.save(str(path))\n"),
 ]
 
