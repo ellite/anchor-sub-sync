@@ -27,7 +27,9 @@ DEFAULT_CONFIG = {
     "api_server": {
         "host": "127.0.0.1",
         "port": 5000,
-        "idle_timeout_seconds": 60
+        "idle_timeout_seconds": 60,
+        "token": "",
+        "allowed_dirs": []
     }
 }
 

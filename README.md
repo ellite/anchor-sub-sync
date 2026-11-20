@@ -31,7 +31,7 @@
 - 🧽 **Clean & Fix**:  Repair and clean subtitle files
 - 🔄 **Convert**: Convert between subtitle formats
 - 📥 **Download**: Automatically find and download matching subtitles
-- 🔌 **API Mode**: Expose Anchor's translation engine as a local API server, compatible with Subtitle Edit's Auto-Translate feature.
+- 🔌 **API Mode**: Expose Anchor's translation engine as a local API server, compatible with Subtitle Edit's Auto-Translate feature, and queue audio syncs over HTTP for other tools.
 
 ## 🚀 Requirements
 
@@ -107,7 +107,10 @@ pip install --upgrade ctranslate2
 
 ## 🔌 API Mode (Subtitle Edit Integration)
 
-Anchor can run as a local translation API server, compatible with **Subtitle Edit's Auto-Translate** feature. This lets you use Anchor's NLLB translation engine directly from within Subtitle Edit.
+Anchor can run as a local API server. It serves two things:
+
+- **Translation**, compatible with **Subtitle Edit's Auto-Translate** feature, so you can use Anchor's NLLB translation engine directly from within Subtitle Edit.
+- **Audio sync jobs**, so another program (a media dashboard, a script) can ask Anchor to re-time a subtitle against its video. See [Endpoints](#-endpoints).
 
 Start the API server with:
 
@@ -115,7 +118,7 @@ Start the API server with:
 anchor --api
 ```
 
-The server will idle with no VRAM usage and automatically load the translation model on the first request, unloading it again after the configured idle timeout.
+The server will idle with no VRAM usage and automatically load the translation model on the first request, unloading it again after the configured idle timeout. A sync job runs in its own process and unloads the translation model first, so the two never compete for the GPU.
 
 ### ⚙️ Configuration
 
@@ -125,7 +128,9 @@ The API server is configured via `~/.anchor/config.json`:
 "api_server": {
     "host": "127.0.0.1",
     "port": 5000,
-    "idle_timeout_seconds": 60
+    "idle_timeout_seconds": 60,
+    "token": "",
+    "allowed_dirs": []
 }
 ```
 
@@ -134,6 +139,82 @@ The API server is configured via `~/.anchor/config.json`:
 | `host` | `127.0.0.1` for local access only. Change to `0.0.0.0` to allow access from other machines on the network. |
 | `port` | The port the API listens on. |
 | `idle_timeout_seconds` | How long (in seconds) the model stays in VRAM after the last request before being unloaded. |
+| `token` | Optional. When set, `POST /sync` and `GET /jobs/{id}` require `Authorization: Bearer <token>`. `/translate` stays open, because Subtitle Edit cannot send one. Leave empty for no authentication. |
+| `allowed_dirs` | List of absolute folders `/sync` may read and write. A video or subtitle outside all of them is refused, symbolic links and `..` included. **Empty means `/sync` is disabled.** |
+
+Restart the API server after changing `~/.anchor/config.json`.
+
+> ⚠️ `/sync` writes next to the files it is given, and with `"overwrite": true` it replaces the subtitle. Keep `allowed_dirs` to your media folders, set a `token`, and do not expose the port beyond a network you trust.
+
+### 📡 Endpoints
+
+| Method | Path | Auth | Purpose |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/` | none | Health check. |
+| `GET` | `/languages` | none | Languages offered to Subtitle Edit. |
+| `POST` | `/translate` | none | Translate lines (the Subtitle Edit endpoint). |
+| `POST` | `/sync` | token | Queue an audio sync of one subtitle. |
+| `GET` | `/jobs/{id}` | token | Status and result of a sync job. |
+
+"token" means the endpoint requires the bearer token only when `api_server.token` is set.
+
+#### `POST /sync`
+
+Queues an audio sync (the same work as `anchor -s <subtitle> -v <video>`) and returns at once, because a sync takes minutes. Jobs run one at a time, in the order they arrive.
+
+```bash
+curl -X POST http://localhost:8007/sync \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"video": "/media/TV/Show/S01E01.mkv", "subtitle": "/media/TV/Show/S01E01.en.srt", "overwrite": false}'
+```
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `video` | string, required | Absolute path of the video. |
+| `subtitle` | string, required | Absolute path of the subtitle (`.srt`, `.ass`, `.vtt`). Both paths are given, so Anchor does not have to match one to the other. |
+| `overwrite` | bool, default `false` | `false` saves the result as `<name>.synced.srt` next to the subtitle (a numbered name if that exists). `true` replaces the subtitle in place, like `anchor -o`; no backup is made. |
+
+Returns the job (see below) with `"state": "queued"`.
+
+| Status | Meaning |
+| :--- | :--- |
+| `400` | A path is not absolute. |
+| `401` | Missing or wrong token. |
+| `403` | `allowed_dirs` is empty, or a path is outside it. |
+| `404` | The video or subtitle does not exist. |
+| `422` | The body is missing a field or has the wrong type. |
+
+#### `GET /jobs/{id}`
+
+```json
+{
+  "id": "2e4fcf68c735",
+  "state": "done",
+  "video": "/media/TV/Show/S01E01.mkv",
+  "subtitle": "/media/TV/Show/S01E01.en.srt",
+  "overwrite": false,
+  "created": 1793824124.2,
+  "started": 1793824124.3,
+  "finished": 1793824190.8,
+  "progress": "✨ Sync Complete in 66.1s",
+  "result": {
+    "subtitle": "/media/TV/Show/S01E01.en.srt",
+    "output": "/media/TV/Show/S01E01.en.synced.srt",
+    "lines": 812, "anchors": 790, "rejected": 4, "seconds": 66.1, "ok": true
+  },
+  "error": null
+}
+```
+
+| Field | Description |
+| :--- | :--- |
+| `state` | `queued`, `running`, `done` or `error`. Poll until it is `done` or `error` (every few seconds is plenty). |
+| `progress` | The last line Anchor printed while running. For display only. |
+| `result` | Set when `done`. `output` is the file that was written; `anchors` of `lines` is how many cues were pinned to speech. |
+| `error` | Set when `error`: the reason, such as `Translation Failed: CUDA failed with error out of memory`. |
+| `log` | With an error, the last lines of Anchor's output. |
+
+`404` for an unknown id. Jobs are kept in memory only: the last 200 are remembered and a restart forgets them, so read the result before restarting the service.
 
 ### 🖥️ Subtitle Edit Setup
 
@@ -431,7 +512,7 @@ You can override the automatic hardware detection or control specific settings u
 | --version | -V | Show the version and exit. |
 | --cpu | | Force CPU execution, bypassing GPU detection. |
 | --check-hardware | | Re-run hardware detection and refresh the cached profile. |
-| --api | | Start the local translation API server (see API Mode). |
+| --api | | Start the local API server: translation and audio sync jobs (see API Mode). |
 | --check | | Check whether subtitles are in sync with their video. For a single file it prints the report and then offers to fix it (frame rate change, Audio Sync, or nothing). With `-s` it checks that file, without it you pick files in the picker. See [Sync Check](#-sync-check) below. |
 | --report | | With or instead of `--check`: only print the report and stop, never ask, nothing written (exit code 3 when one is not in sync, for scripts). |
 | --fix | | With `--check`: act on the advice without asking (not with `--report`). Subtitles in sync are skipped, a suggested frame rate change is applied (after verifying it), otherwise Audio Sync runs. |

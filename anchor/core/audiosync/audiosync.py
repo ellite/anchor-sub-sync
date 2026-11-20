@@ -1,4 +1,6 @@
+import os
 import sys
+import json
 import time
 import gc
 import copy
@@ -162,6 +164,7 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
     check_results = []
     check_entries = []          # for the batch summary: name, video name, result
     failed_names = []           # files that could not be checked or synced
+    sync_results = []           # machine-readable outcome per file, written to $ANCHOR_RESULT_FILE (the API reads it)
     performed_sync = False      # a check that went on into an audio sync
     action = ("Batch Sync" if len(queue) > 1 else "Sync") if not check else ("Batch Sync Check" if len(queue) > 1 else "Sync Check")
     console.print(f"\n[bold green]🚀 Starting {action} ({len(queue)} {file_label})...[/bold green]")
@@ -448,15 +451,25 @@ def run_audiosync(args, device, model_size, compute_type, batch_size, translatio
             if not needs_translation:
                 console.print(f" 💾 Saved to: [underline]{final_output_path.name}[/underline]")
 
+            sync_results.append({"subtitle": str(sub), "output": str(final_output_path), "lines": lines,
+                                 "anchors": anchors, "rejected": rejected, "seconds": round(duration, 1), "ok": True})
 
         except Exception as e:
             failed_count += 1
             failed_names.append(sub.name)
             console.print(f"[bold red]❌ Failed:[/bold red] {e}")
+            sync_results.append({"subtitle": str(sub), "ok": False, "error": str(e)})
 
     # Cleanup at very end
     free_whisper()
 
+    result_file = os.environ.get("ANCHOR_RESULT_FILE")
+    if result_file:
+        try:
+            with open(result_file, "w", encoding="utf-8") as f:
+                json.dump(sync_results, f)
+        except OSError:
+            pass
     
     total_duration = time.time() - total_start
     
